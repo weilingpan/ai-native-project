@@ -82,50 +82,142 @@ const ChatInterface = () => {
         }
     };
 
-    const handleSendMessage = () => {
+    const handleSendMessage = async () => {
         if (!inputValue.trim()) return;
+
+        const currentInput = inputValue; // Capture current input
+        setInputValue(''); // Clear input immediately
 
         const userMessage = {
             id: Date.now(),
-            text: inputValue,
+            text: currentInput,
             sender: 'user',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
+        const botMsgId = Date.now() + 1;
+        const initialBotMessage = {
+            id: botMsgId,
+            text: '', // Start empty
+            sender: 'bot',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isStreaming: true // Optional flag for UI loading state if desired
+        };
+
+        // 1. Add User Message and Initial Bot Message to State
         setSessions(prevSessions => prevSessions.map(session => {
             if (session.id === activeSessionId) {
-                // Auto-update title based on first message
                 const newTitle = session.messages.length === 0
-                    ? (inputValue.length > 20 ? inputValue.substring(0, 20) + '...' : inputValue)
+                    ? (currentInput.length > 20 ? currentInput.substring(0, 20) + '...' : currentInput)
                     : session.title;
-
                 return {
                     ...session,
-                    messages: [...session.messages, userMessage],
+                    messages: [...session.messages, userMessage, initialBotMessage],
                     title: newTitle
                 };
             }
             return session;
         }));
 
-        setInputValue('');
+        try {
+            // 2. Call API (Using proxy: /api -> http://127.0.0.1:8000)
+            const response = await fetch('/api/runs/completions', {
+                method: 'POST',
+                headers: {
+                    'accept': 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    human_message: currentInput,
+                    model: "gpt-5-nano",
+                    stream: true
+                })
+            });
 
-        // Simulate AI Echo with a slight delay
-        setTimeout(() => {
-            const botMessage = {
-                id: Date.now() + 1,
-                text: inputValue, // Echoing the user's input
-                sender: 'bot',
-                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`API Error ${response.status}: ${errorText}`);
+            }
 
-            setSessions(prevSessions => prevSessions.map(session => {
-                if (session.id === activeSessionId) {
-                    return { ...session, messages: [...session.messages, botMessage] };
+            // 3. Handle Streaming Response
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let botText = '';
+            let buffer = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+
+                // Process complete lines from buffer
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep the incomplete line in buffer
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed) continue;
+
+                    try {
+                        // Check for NDJSON format: {"data": "..."}
+                        if (trimmed.startsWith('{')) {
+                            const json = JSON.parse(trimmed);
+                            const content = json.data || json.content || json.text;
+                            if (content) botText += content;
+                        }
+                        // Check for standard SSE format: data: {...}
+                        else if (trimmed.startsWith('data: ')) {
+                            const dataStr = trimmed.slice(6);
+                            if (dataStr === '[DONE]') continue;
+
+                            const json = JSON.parse(dataStr);
+                            const content = json.choices?.[0]?.delta?.content
+                                || json.content
+                                || json.text
+                                || (typeof json === 'string' ? json : '');
+
+                            if (content) botText += content;
+                        }
+                    } catch (e) {
+                        console.warn('Error parsing stream line:', trimmed, e);
+                    }
                 }
-                return session;
+
+                // Update State with new text
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return {
+                            ...s,
+                            messages: s.messages.map(m =>
+                                m.id === botMsgId
+                                    ? { ...m, text: botText }
+                                    : m
+                            )
+                        };
+                    }
+                    return s;
+                }));
+            }
+
+        } catch (error) {
+            console.error("Failed to fetch bot response:", error);
+            // Optionally update the bot message to show an error
+            setSessions(prev => prev.map(s => {
+                if (s.id === activeSessionId) {
+                    return {
+                        ...s,
+                        messages: s.messages.map(m =>
+                            m.id === botMsgId
+                                ? { ...m, text: `Error: ${error.message}` }
+                                : m
+                        )
+                    };
+                }
+                return s;
             }));
-        }, 600);
+        }
     };
 
     const handleKeyDown = (e) => {
@@ -308,7 +400,15 @@ const ChatInterface = () => {
                                             ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
                                             : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
                                             }`}>
-                                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                            {message.sender === 'user' || message.text ? (
+                                                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                            ) : (
+                                                <div className="flex gap-1 h-5 items-center px-1">
+                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                                                </div>
+                                            )}
                                         </div>
                                         <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
                                             {message.timestamp}
