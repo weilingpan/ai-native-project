@@ -1,11 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const ChatInterface = () => {
-    const [messages, setMessages] = useState([]);
+    const [sessions, setSessions] = useState([
+        { id: 1, title: 'New Chat', messages: [], timestamp: new Date() }
+    ]);
+    const [activeSessionId, setActiveSessionId] = useState(1);
     const [inputValue, setInputValue] = useState('');
     const messagesEndRef = useRef(null);
+
+    const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -13,7 +18,35 @@ const ChatInterface = () => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [messages]);
+    }, [activeSession?.messages]);
+
+    const handleCreateSession = () => {
+        const newId = Date.now();
+        const newSession = {
+            id: newId,
+            title: 'New Chat',
+            messages: [],
+            timestamp: new Date()
+        };
+        setSessions(prev => [newSession, ...prev]);
+        setActiveSessionId(newId);
+    };
+
+    const handleDeleteSession = (e, sessionId) => {
+        e.stopPropagation();
+        const newSessions = sessions.filter(s => s.id !== sessionId);
+        if (newSessions.length === 0) {
+            // Keep at least one session
+            const newSession = { id: Date.now(), title: 'New Chat', messages: [], timestamp: new Date() };
+            setSessions([newSession]);
+            setActiveSessionId(newSession.id);
+        } else {
+            setSessions(newSessions);
+            if (activeSessionId === sessionId) {
+                setActiveSessionId(newSessions[0].id);
+            }
+        }
+    };
 
     const handleSendMessage = () => {
         if (!inputValue.trim()) return;
@@ -25,7 +58,22 @@ const ChatInterface = () => {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
 
-        setMessages(prev => [...prev, userMessage]);
+        setSessions(prevSessions => prevSessions.map(session => {
+            if (session.id === activeSessionId) {
+                // Auto-update title based on first message
+                const newTitle = session.messages.length === 0
+                    ? (inputValue.length > 20 ? inputValue.substring(0, 20) + '...' : inputValue)
+                    : session.title;
+
+                return {
+                    ...session,
+                    messages: [...session.messages, userMessage],
+                    title: newTitle
+                };
+            }
+            return session;
+        }));
+
         setInputValue('');
 
         // Simulate AI Echo with a slight delay
@@ -36,7 +84,13 @@ const ChatInterface = () => {
                 sender: 'bot',
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
             };
-            setMessages(prev => [...prev, botMessage]);
+
+            setSessions(prevSessions => prevSessions.map(session => {
+                if (session.id === activeSessionId) {
+                    return { ...session, messages: [...session.messages, botMessage] };
+                }
+                return session;
+            }));
         }, 600);
     };
 
@@ -48,94 +102,150 @@ const ChatInterface = () => {
     };
 
     return (
-        <div className="flex-1 flex flex-col h-full bg-slate-900/50 relative overflow-hidden">
-            {/* Chat Header */}
-            <div className="h-20 border-b border-slate-700/50 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
-                        <Bot size={24} />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-semibold text-white">AI Assistant</h2>
-                        <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                            <span className="text-xs text-slate-400">Always active</span>
+        <div className="flex h-full w-full bg-slate-900 text-text overflow-hidden">
+            {/* Sessions Sidebar */}
+            <div className="w-64 bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl">
+                <div className="p-4">
+                    <button
+                        onClick={handleCreateSession}
+                        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 group"
+                    >
+                        <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
+                        <span className="font-medium">New Chat</span>
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar">
+                    {sessions.map(session => (
+                        <div
+                            key={session.id}
+                            onClick={() => setActiveSessionId(session.id)}
+                            className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent ${activeSessionId === session.id
+                                    ? 'bg-slate-800 text-white border-slate-700/50 shadow-md'
+                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                }`}
+                        >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <MessageSquare size={18} className={activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'} />
+                                <span className="truncate text-sm font-medium">{session.title}</span>
+                            </div>
+                            <button
+                                onClick={(e) => handleDeleteSession(e, session.id)}
+                                className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 ${sessions.length === 1 ? 'hidden' : ''
+                                    }`}
+                            >
+                                <Trash2 size={14} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+
+                <div className="p-4 border-t border-slate-700/50">
+                    <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30 border border-slate-700/30">
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
+                            U
+                        </div>
+                        <div className="flex-1 overflow-hidden">
+                            <p className="text-sm font-medium text-slate-200 truncate">User Account</p>
+                            <p className="text-xs text-slate-500 truncate">Pro Plan</p>
                         </div>
                     </div>
                 </div>
-                <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
-                    <MoreVertical size={20} />
-                </button>
             </div>
 
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {messages.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
-                        <Bot size={48} className="mb-4 text-slate-600" />
-                        <p>Start a new conversation...</p>
+            {/* Main Chat Area */}
+            <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-900/50">
+                {/* Chat Header */}
+                <div className="h-16 border-b border-slate-700/50 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
+                    <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                            <Bot size={24} />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-white">{activeSession?.title}</h2>
+                            <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                                <span className="text-xs text-slate-400">Always active</span>
+                            </div>
+                        </div>
                     </div>
-                ) : (
-                    <AnimatePresence initial={false}>
-                        {messages.map((message) => (
-                            <motion.div
-                                key={message.id}
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
-                            >
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${message.sender === 'user'
+                    <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
+                        <MoreVertical size={20} />
+                    </button>
+                </div>
+
+                {/* Messages Area */}
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                    {activeSession?.messages.length === 0 ? (
+                        <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                            <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700">
+                                <Bot size={40} className="text-blue-500" />
+                            </div>
+                            <h3 className="text-xl font-medium text-slate-300 mb-2">How can I help you today?</h3>
+                            <p className="text-sm text-slate-500">I can help you create, design, and code.</p>
+                        </div>
+                    ) : (
+                        <AnimatePresence initial={false}>
+                            {activeSession?.messages.map((message) => (
+                                <motion.div
+                                    key={message.id}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${message.sender === 'user'
                                         ? 'bg-purple-500/20 text-purple-400'
                                         : 'bg-blue-500/20 text-blue-400'
-                                    }`}>
-                                    {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
-                                </div>
-                                <div className={`space-y-2 max-w-[80%]`}>
-                                    <div className={`p-4 rounded-2xl shadow-md ${message.sender === 'user'
+                                        }`}>
+                                        {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
+                                    </div>
+                                    <div className={`space-y-2 max-w-[80%]`}>
+                                        <div className={`p-4 rounded-2xl shadow-md ${message.sender === 'user'
                                             ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
                                             : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
-                                        }`}>
-                                        <p className="whitespace-pre-wrap">{message.text}</p>
+                                            }`}>
+                                            <p className="whitespace-pre-wrap">{message.text}</p>
+                                        </div>
+                                        <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
+                                            {message.timestamp}
+                                        </span>
                                     </div>
-                                    <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
-                                        {message.timestamp}
-                                    </span>
-                                </div>
-                            </motion.div>
-                        ))}
-                    </AnimatePresence>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    )}
+                    <div ref={messagesEndRef} />
+                </div>
 
-            {/* Input Area */}
-            <div className="p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
-                <div className="max-w-4xl mx-auto relative group">
-                    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover:opacity-100 duration-500"></div>
-                    <div className="relative flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
-                        <button className="p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
-                            <Paperclip size={20} />
-                        </button>
-                        <textarea
-                            value={inputValue}
-                            onChange={(e) => setInputValue(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder="Type your message..."
-                            className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-12 py-3 max-h-32"
-                        />
-                        <button
-                            onClick={handleSendMessage}
-                            disabled={!inputValue.trim()}
-                            className={`p-3 rounded-lg shadow-lg transition-all ${inputValue.trim()
+                {/* Input Area */}
+                <div className="p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
+                    <div className="max-w-4xl mx-auto relative group">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover:opacity-100 duration-500"></div>
+                        <div className="relative flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
+                            <button className="p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+                                <Paperclip size={20} />
+                            </button>
+                            <textarea
+                                value={inputValue}
+                                onChange={(e) => setInputValue(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder="Type your message..."
+                                className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-12 py-3 max-h-32 focus:outline-none"
+                            />
+                            <button
+                                onClick={handleSendMessage}
+                                disabled={!inputValue.trim()}
+                                className={`p-3 rounded-lg shadow-lg transition-all ${inputValue.trim()
                                     ? 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/25'
                                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                                }`}
-                        >
-                            <Send size={18} />
-                        </button>
-                    </div>
-                    <div className="text-center mt-2">
-                        <span className="text-xs text-slate-500">AI can make mistakes. Consider checking important information.</span>
+                                    }`}
+                            >
+                                <Send size={18} />
+                            </button>
+                        </div>
+                        <div className="text-center mt-2">
+                            <span className="text-xs text-slate-500">AI can make mistakes. Consider checking important information.</span>
+                        </div>
                     </div>
                 </div>
             </div>

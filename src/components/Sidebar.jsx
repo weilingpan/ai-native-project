@@ -7,7 +7,6 @@ import {
     Settings,
     Home,
     User,
-    PlusCircle,
 } from 'lucide-react';
 import classNames from 'classnames';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -75,19 +74,7 @@ const Sidebar = () => {
                 </button>
             </div>
 
-            {/* New Chat Button */}
-            <div className="p-4">
-                <button
-                    onClick={() => handleNavigation('/chat_session')}
-                    className={classNames(
-                        "w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl p-3 shadow-lg transition-all duration-300 group",
-                        { 'px-0': !isOpen }
-                    )}
-                >
-                    <PlusCircle size={24} />
-                    {isOpen && <span className="font-medium whitespace-nowrap">New Chat</span>}
-                </button>
-            </div>
+
 
             {/* Navigation */}
             <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto">
