@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const ChatInterface = () => {
@@ -8,9 +8,22 @@ const ChatInterface = () => {
     ]);
     const [activeSessionId, setActiveSessionId] = useState(1);
     const [inputValue, setInputValue] = useState('');
+    const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+    const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
     const messagesEndRef = useRef(null);
 
     const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobile(window.innerWidth < 768);
+            if (window.innerWidth >= 768) {
+                setMobileView('chat'); // Reset to default split view on desktop
+            }
+        };
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -18,7 +31,7 @@ const ChatInterface = () => {
 
     useEffect(() => {
         scrollToBottom();
-    }, [activeSession?.messages]);
+    }, [activeSession?.messages, mobileView]);
 
     const handleCreateSession = () => {
         const newId = Date.now();
@@ -30,6 +43,16 @@ const ChatInterface = () => {
         };
         setSessions(prev => [newSession, ...prev]);
         setActiveSessionId(newId);
+        if (isMobile) {
+            setMobileView('chat');
+        }
+    };
+
+    const handleSessionSelect = (sessionId) => {
+        setActiveSessionId(sessionId);
+        if (isMobile) {
+            setMobileView('chat');
+        }
     };
 
     const handleClearSession = (e, sessionId) => {
@@ -111,10 +134,14 @@ const ChatInterface = () => {
         }
     };
 
+    // Render Logic
+    const showSessionList = !isMobile || (isMobile && mobileView === 'list');
+    const showChatArea = !isMobile || (isMobile && mobileView === 'chat');
+
     return (
-        <div className="flex h-full w-full bg-slate-900 text-text overflow-hidden">
-            {/* Sessions Sidebar */}
-            <div className="w-64 bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl">
+        <div className="flex h-full w-full bg-slate-900 text-text overflow-hidden relative">
+            {/* Sessions Sidebar / List View */}
+            <div className={`${showSessionList ? 'flex' : 'hidden'} ${isMobile ? 'w-full pt-16' : 'w-64'} bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl transition-all duration-300`}>
                 <div className="p-4">
                     <button
                         onClick={handleCreateSession}
@@ -123,13 +150,16 @@ const ChatInterface = () => {
                         <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
                         <span className="font-medium">New Chat</span>
                     </button>
+                    {isMobile && (
+                        <p className="text-center text-xs text-slate-500 mt-4">Select a chat to start messaging</p>
+                    )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar">
                     {sessions.map(session => (
                         <div
                             key={session.id}
-                            onClick={() => setActiveSessionId(session.id)}
+                            onClick={() => handleSessionSelect(session.id)}
                             className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent ${activeSessionId === session.id
                                 ? 'bg-slate-800 text-white border-slate-700/50 shadow-md'
                                 : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
@@ -139,7 +169,7 @@ const ChatInterface = () => {
                                 <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 <span className="truncate text-sm font-medium">{session.title}</span>
                             </div>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
                                     onClick={(e) => handleClearSession(e, session.id)}
                                     className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
@@ -174,18 +204,26 @@ const ChatInterface = () => {
             </div>
 
             {/* Main Chat Area */}
-            <div className="flex-1 flex flex-col h-full relative overflow-hidden bg-slate-900/50">
+            <div className={`${showChatArea ? 'flex' : 'hidden'} flex-1 flex flex-col h-full relative overflow-hidden bg-slate-900/50`}>
                 {/* Chat Header */}
-                <div className="h-16 border-b border-slate-700/50 flex items-center justify-between px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10">
-                    <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400">
+                <div className={`h-16 border-b border-slate-700/50 flex items-center justify-between px-4 md:px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 ${isMobile ? 'pl-4' : ''}`}>
+                    <div className="flex items-center gap-3">
+                        {isMobile && (
+                            <button
+                                onClick={() => setMobileView('list')}
+                                className="mr-2 p-1 hover:bg-slate-800 rounded-lg text-slate-400"
+                            >
+                                <ChevronLeft size={24} />
+                            </button>
+                        )}
+                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                             <Bot size={24} />
                         </div>
-                        <div>
-                            <h2 className="text-lg font-semibold text-white">{activeSession?.title}</h2>
+                        <div className="min-w-0">
+                            <h2 className="text-lg font-semibold text-white truncate max-w-[150px] md:max-w-md">{activeSession?.title}</h2>
                             <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                                <span className="text-xs text-slate-400">Always active</span>
+                                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></span>
+                                <span className="text-xs text-slate-400 whitespace-nowrap">Always active</span>
                             </div>
                         </div>
                     </div>
@@ -195,13 +233,13 @@ const ChatInterface = () => {
                 </div>
 
                 {/* Messages Area */}
-                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                     {activeSession?.messages.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                             <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700">
                                 <Bot size={40} className="text-blue-500" />
                             </div>
-                            <h3 className="text-xl font-medium text-slate-300 mb-2">How can I help you today?</h3>
+                            <h3 className="text-xl font-medium text-slate-300 mb-2">How can I help you?</h3>
                             <p className="text-sm text-slate-500">I can help you create, design, and code.</p>
                         </div>
                     ) : (
@@ -219,12 +257,12 @@ const ChatInterface = () => {
                                         }`}>
                                         {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
                                     </div>
-                                    <div className={`space-y-2 max-w-[80%]`}>
-                                        <div className={`p-4 rounded-2xl shadow-md ${message.sender === 'user'
+                                    <div className={`space-y-2 max-w-[80%] md:max-w-[80%]`}>
+                                        <div className={`p-3 md:p-4 rounded-2xl shadow-md text-sm md:text-base ${message.sender === 'user'
                                             ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
                                             : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
                                             }`}>
-                                            <p className="whitespace-pre-wrap">{message.text}</p>
+                                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
                                         </div>
                                         <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
                                             {message.timestamp}
@@ -238,33 +276,30 @@ const ChatInterface = () => {
                 </div>
 
                 {/* Input Area */}
-                <div className="p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
+                <div className="p-4 md:p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
                     <div className="max-w-4xl mx-auto relative group">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover:opacity-100 duration-500"></div>
                         <div className="relative flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
-                            <button className="p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+                            <button className="p-2 md:p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
                                 <Paperclip size={20} />
                             </button>
                             <textarea
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
                                 onKeyDown={handleKeyDown}
-                                placeholder="Type your message..."
-                                className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-12 py-3 max-h-32 focus:outline-none"
+                                placeholder="Message..."
+                                className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-10 md:h-12 py-2 md:py-3 max-h-32 focus:outline-none"
                             />
                             <button
                                 onClick={handleSendMessage}
                                 disabled={!inputValue.trim()}
-                                className={`p-3 rounded-lg shadow-lg transition-all ${inputValue.trim()
+                                className={`p-2 md:p-3 rounded-lg shadow-lg transition-all ${inputValue.trim()
                                     ? 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/25'
                                     : 'bg-slate-700 text-slate-500 cursor-not-allowed'
                                     }`}
                             >
                                 <Send size={18} />
                             </button>
-                        </div>
-                        <div className="text-center mt-2">
-                            <span className="text-xs text-slate-500">AI can make mistakes. Consider checking important information.</span>
                         </div>
                     </div>
                 </div>
