@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2 } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 
 const ChatInterface = () => {
@@ -30,6 +30,16 @@ const ChatInterface = () => {
         };
         setSessions(prev => [newSession, ...prev]);
         setActiveSessionId(newId);
+    };
+
+    const handleClearSession = (e, sessionId) => {
+        e.stopPropagation();
+        setSessions(prev => prev.map(s => {
+            if (s.id === sessionId) {
+                return { ...s, messages: [] };
+            }
+            return s;
+        }));
     };
 
     const handleDeleteSession = (e, sessionId) => {
@@ -121,21 +131,31 @@ const ChatInterface = () => {
                             key={session.id}
                             onClick={() => setActiveSessionId(session.id)}
                             className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent ${activeSessionId === session.id
-                                    ? 'bg-slate-800 text-white border-slate-700/50 shadow-md'
-                                    : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                ? 'bg-slate-800 text-white border-slate-700/50 shadow-md'
+                                : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                                 }`}
                         >
-                            <div className="flex items-center gap-3 overflow-hidden">
-                                <MessageSquare size={18} className={activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'} />
+                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                                <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 <span className="truncate text-sm font-medium">{session.title}</span>
                             </div>
-                            <button
-                                onClick={(e) => handleDeleteSession(e, session.id)}
-                                className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100 ${sessions.length === 1 ? 'hidden' : ''
-                                    }`}
-                            >
-                                <Trash2 size={14} />
-                            </button>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => handleClearSession(e, session.id)}
+                                    className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
+                                    title="Clear Chat History"
+                                >
+                                    <Eraser size={14} />
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteSession(e, session.id)}
+                                    className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors ${sessions.length === 1 ? 'hidden' : ''
+                                        }`}
+                                    title="Delete Chat"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
