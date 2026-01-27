@@ -2,6 +2,7 @@ import React from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import Dashboard from './components/Dashboard';
+import ComingSoon from './components/ComingSoon';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Routes, Route, useLocation } from 'react-router-dom';
 
@@ -37,7 +38,7 @@ function App() {
                                 </PageWrapper>
                             } />
                             <Route path="*" element={
-                                <div className="flex-1 flex items-center justify-center text-slate-500">Coming Soon</div>
+                                <ComingSoon />
                             } />
                         </Routes>
                     </AnimatePresence>

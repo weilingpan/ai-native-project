@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     MessageSquare,
@@ -15,6 +16,8 @@ import { useNavigate, useLocation } from 'react-router-dom';
 const Sidebar = () => {
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [isOpen, setIsOpen] = useState(!isMobile); // Default closed on mobile, open on desktop
+    const [hoveredItem, setHoveredItem] = useState(null);
+    const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -55,6 +58,15 @@ const Sidebar = () => {
     const handleNavigation = (path) => {
         navigate(path);
         if (isMobile) setIsOpen(false); // Close sidebar on mobile navigation
+    };
+
+    const handleItemHover = (e, itemId) => {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setTooltipPos({
+            top: rect.bottom,
+            left: rect.left + rect.width / 2
+        });
+        setHoveredItem(itemId);
     };
 
     // Sidebar Width Logic
@@ -142,6 +154,8 @@ const Sidebar = () => {
                         <div
                             key={item.id}
                             onClick={() => handleNavigation(item.path)}
+                            onMouseEnter={(e) => handleItemHover(e, item.id)}
+                            onMouseLeave={() => setHoveredItem(null)}
                             className={classNames(
                                 "flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all duration-200 group relative",
                                 {
@@ -172,11 +186,18 @@ const Sidebar = () => {
                                 )}
                             </AnimatePresence>
 
-                            {/* Tooltip for collapsed desktop state */}
-                            {!isOpen && !isMobile && (
-                                <div className="absolute left-full ml-4 px-2 py-1 bg-slate-800 text-white text-sm rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap shadow-xl border border-slate-700 z-50">
+                            {/* Portal Tooltip for collapsed desktop state */}
+                            {!isOpen && !isMobile && hoveredItem === item.id && createPortal(
+                                <div
+                                    className="fixed z-[100] -translate-x-1/2 mt-1 px-2 py-0.5 bg-slate-900/60 backdrop-blur-md text-slate-300 text-[10px] font-medium rounded-md border border-slate-700/30 whitespace-nowrap pointer-events-none animate-in fade-in zoom-in-95 duration-200 tracking-wide"
+                                    style={{
+                                        top: tooltipPos.top,
+                                        left: tooltipPos.left
+                                    }}
+                                >
                                     {item.label}
-                                </div>
+                                </div>,
+                                document.body
                             )}
 
                             {/* Active Indicator */}

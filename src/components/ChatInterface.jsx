@@ -10,6 +10,7 @@ const ChatInterface = () => {
     const [inputValue, setInputValue] = useState('');
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
+    const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const messagesEndRef = useRef(null);
 
     const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
@@ -206,12 +207,12 @@ const ChatInterface = () => {
             {/* Main Chat Area */}
             <div className={`${showChatArea ? 'flex' : 'hidden'} flex-1 flex flex-col h-full relative overflow-hidden bg-slate-900/50`}>
                 {/* Chat Header */}
-                <div className={`h-16 border-b border-slate-700/50 flex items-center justify-between px-4 md:px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 ${isMobile ? 'pl-4' : ''}`}>
-                    <div className="flex items-center gap-3">
+                <div className={`h-16 border-b border-slate-700/50 flex items-center justify-between px-4 md:px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 ${isMobile ? 'pl-16' : ''}`}>
+                    <div className="flex items-center gap-3 overflow-hidden">
                         {isMobile && (
                             <button
                                 onClick={() => setMobileView('list')}
-                                className="mr-2 p-1 hover:bg-slate-800 rounded-lg text-slate-400"
+                                className="mr-1 p-1 hover:bg-slate-800 rounded-lg text-slate-400 shrink-0"
                             >
                                 <ChevronLeft size={24} />
                             </button>
@@ -219,17 +220,72 @@ const ChatInterface = () => {
                         <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
                             <Bot size={24} />
                         </div>
-                        <div className="min-w-0">
-                            <h2 className="text-lg font-semibold text-white truncate max-w-[150px] md:max-w-md">{activeSession?.title}</h2>
+                        <div className="min-w-0 flex-1">
+                            <h2 className="text-lg font-semibold text-white truncate">{activeSession?.title}</h2>
                             <div className="flex items-center gap-2">
                                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse shrink-0"></span>
                                 <span className="text-xs text-slate-400 whitespace-nowrap">Always active</span>
                             </div>
                         </div>
                     </div>
-                    <button className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors">
-                        <MoreVertical size={20} />
-                    </button>
+
+                    {/* Header Actions Menu */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
+                            className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"
+                        >
+                            <MoreVertical size={20} />
+                        </button>
+
+                        <AnimatePresence>
+                            {isHeaderMenuOpen && (
+                                <>
+                                    <div
+                                        className="fixed inset-0 z-10"
+                                        onClick={() => setIsHeaderMenuOpen(false)}
+                                    />
+                                    <motion.div
+                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                        className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden"
+                                    >
+                                        <button
+                                            onClick={() => {
+                                                handleCreateSession();
+                                                setIsHeaderMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                                        >
+                                            <Plus size={16} />
+                                            New Chat
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                handleClearSession(e, activeSessionId);
+                                                setIsHeaderMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2 border-t border-slate-700/50"
+                                        >
+                                            <Eraser size={16} />
+                                            Clear History
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                handleDeleteSession(e, activeSessionId);
+                                                setIsHeaderMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 border-t border-slate-700/50"
+                                        >
+                                            <Trash2 size={16} />
+                                            Delete Chat
+                                        </button>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 {/* Messages Area */}
