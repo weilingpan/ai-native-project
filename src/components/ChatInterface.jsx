@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { createPortal } from 'react-dom';
 
 const ChatInterface = () => {
     const [sessions, setSessions] = useState([
@@ -12,6 +13,8 @@ const ChatInterface = () => {
     const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const messagesEndRef = useRef(null);
+    const buttonRef = useRef(null);
+    const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
 
     const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
 
@@ -314,59 +317,73 @@ const ChatInterface = () => {
                     {/* Header Actions Menu */}
                     <div className="relative">
                         <button
-                            onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
+                            ref={buttonRef}
+                            onClick={() => {
+                                if (!isHeaderMenuOpen && buttonRef.current) {
+                                    const rect = buttonRef.current.getBoundingClientRect();
+                                    setMenuPos({
+                                        top: rect.bottom + 8,
+                                        right: window.innerWidth - rect.right
+                                    });
+                                }
+                                setIsHeaderMenuOpen(!isHeaderMenuOpen);
+                            }}
                             className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors"
                         >
                             <MoreVertical size={20} />
                         </button>
 
-                        <AnimatePresence>
-                            {isHeaderMenuOpen && (
-                                <>
-                                    <div
-                                        className="fixed inset-0 z-10"
-                                        onClick={() => setIsHeaderMenuOpen(false)}
-                                    />
-                                    <motion.div
-                                        initial={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        animate={{ opacity: 1, scale: 1, y: 0 }}
-                                        exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                        className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-20 overflow-hidden"
-                                    >
-                                        <button
-                                            onClick={() => {
-                                                handleCreateSession();
-                                                setIsHeaderMenuOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                        {createPortal(
+                            <AnimatePresence>
+                                {isHeaderMenuOpen && (
+                                    <>
+                                        <div
+                                            className="fixed inset-0 z-[100]"
+                                            onClick={() => setIsHeaderMenuOpen(false)}
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                            style={{ top: menuPos.top, right: menuPos.right }}
+                                            className="fixed w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-[101] overflow-hidden origin-top-right"
                                         >
-                                            <Plus size={16} />
-                                            New Chat
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                handleClearSession(e, activeSessionId);
-                                                setIsHeaderMenuOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2 border-t border-slate-700/50"
-                                        >
-                                            <Eraser size={16} />
-                                            Clear History
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                handleDeleteSession(e, activeSessionId);
-                                                setIsHeaderMenuOpen(false);
-                                            }}
-                                            className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 border-t border-slate-700/50"
-                                        >
-                                            <Trash2 size={16} />
-                                            Delete Chat
-                                        </button>
-                                    </motion.div>
-                                </>
-                            )}
-                        </AnimatePresence>
+                                            <button
+                                                onClick={() => {
+                                                    handleCreateSession();
+                                                    setIsHeaderMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                                            >
+                                                <Plus size={16} />
+                                                New Chat
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    handleClearSession(e, activeSessionId);
+                                                    setIsHeaderMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2 border-t border-slate-700/50"
+                                            >
+                                                <Eraser size={16} />
+                                                Clear History
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    handleDeleteSession(e, activeSessionId);
+                                                    setIsHeaderMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2 border-t border-slate-700/50"
+                                            >
+                                                <Trash2 size={16} />
+                                                Delete Chat
+                                            </button>
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>,
+                            document.body
+                        )}
                     </div>
                 </div>
 
