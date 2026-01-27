@@ -191,17 +191,7 @@ const ChatInterface = () => {
                     ))}
                 </div>
 
-                <div className="p-4 border-t border-slate-700/50">
-                    <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/30 border border-slate-700/30">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold">
-                            U
-                        </div>
-                        <div className="flex-1 overflow-hidden">
-                            <p className="text-sm font-medium text-slate-200 truncate">User Account</p>
-                            <p className="text-xs text-slate-500 truncate">Pro Plan</p>
-                        </div>
-                    </div>
-                </div>
+
             </div>
 
             {/* Main Chat Area */}
