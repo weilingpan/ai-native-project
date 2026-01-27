@@ -1,7 +1,52 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, MoreVertical, Bot, User } from 'lucide-react';
+import { AnimatePresence, motion } from 'framer-motion';
 
 const ChatInterface = () => {
+    const [messages, setMessages] = useState([]);
+    const [inputValue, setInputValue] = useState('');
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages]);
+
+    const handleSendMessage = () => {
+        if (!inputValue.trim()) return;
+
+        const userMessage = {
+            id: Date.now(),
+            text: inputValue,
+            sender: 'user',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+
+        setMessages(prev => [...prev, userMessage]);
+        setInputValue('');
+
+        // Simulate AI Echo with a slight delay
+        setTimeout(() => {
+            const botMessage = {
+                id: Date.now() + 1,
+                text: inputValue, // Echoing the user's input
+                sender: 'bot',
+                timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            setMessages(prev => [...prev, botMessage]);
+        }, 600);
+    };
+
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSendMessage();
+        }
+    };
+
     return (
         <div className="flex-1 flex flex-col h-full bg-slate-900/50 relative overflow-hidden">
             {/* Chat Header */}
@@ -25,44 +70,42 @@ const ChatInterface = () => {
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
-                {/* Bot Message */}
-                <div className="flex gap-4 max-w-3xl">
-                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 mt-1">
-                        <Bot size={18} />
+                {messages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                        <Bot size={48} className="mb-4 text-slate-600" />
+                        <p>Start a new conversation...</p>
                     </div>
-                    <div className="space-y-2">
-                        <div className="p-4 rounded-2xl bg-slate-800/50 text-slate-200 border border-slate-700/50 shadow-sm rounded-tl-none">
-                            <p>Hello! I'm your AI assistant. How can I help you today? I can assist with code, writing, analysis, and much more.</p>
-                        </div>
-                        <span className="text-xs text-slate-500 px-1">10:23 AM</span>
-                    </div>
-                </div>
-
-                {/* User Message */}
-                <div className="flex gap-4 max-w-3xl ml-auto flex-row-reverse">
-                    <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-400 shrink-0 mt-1">
-                        <User size={18} />
-                    </div>
-                    <div className="space-y-2">
-                        <div className="p-4 rounded-2xl bg-gradient-to-br from-blue-600 to-purple-600 text-white shadow-md rounded-tr-none">
-                            <p>Can you show me a react sidebar component?</p>
-                        </div>
-                        <span className="text-xs text-slate-500 px-1 text-right block">10:24 AM</span>
-                    </div>
-                </div>
-
-                {/* Bot Message */}
-                <div className="flex gap-4 max-w-3xl">
-                    <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center text-blue-400 shrink-0 mt-1">
-                        <Bot size={18} />
-                    </div>
-                    <div className="space-y-2">
-                        <div className="p-4 rounded-2xl bg-slate-800/50 text-slate-200 border border-slate-700/50 shadow-sm rounded-tl-none">
-                            <p>Certainly! I can help you design a responsive and interactive sidebar using React and Tailwind CSS. Would you like it to have specific features like collapsible functionality?</p>
-                        </div>
-                        <span className="text-xs text-slate-500 px-1">10:25 AM</span>
-                    </div>
-                </div>
+                ) : (
+                    <AnimatePresence initial={false}>
+                        {messages.map((message) => (
+                            <motion.div
+                                key={message.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                            >
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${message.sender === 'user'
+                                        ? 'bg-purple-500/20 text-purple-400'
+                                        : 'bg-blue-500/20 text-blue-400'
+                                    }`}>
+                                    {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
+                                </div>
+                                <div className={`space-y-2 max-w-[80%]`}>
+                                    <div className={`p-4 rounded-2xl shadow-md ${message.sender === 'user'
+                                            ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
+                                            : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
+                                        }`}>
+                                        <p className="whitespace-pre-wrap">{message.text}</p>
+                                    </div>
+                                    <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
+                                        {message.timestamp}
+                                    </span>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </AnimatePresence>
+                )}
+                <div ref={messagesEndRef} />
             </div>
 
             {/* Input Area */}
@@ -74,10 +117,20 @@ const ChatInterface = () => {
                             <Paperclip size={20} />
                         </button>
                         <textarea
+                            value={inputValue}
+                            onChange={(e) => setInputValue(e.target.value)}
+                            onKeyDown={handleKeyDown}
                             placeholder="Type your message..."
                             className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-12 py-3 max-h-32"
                         />
-                        <button className="p-3 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg hover:shadow-blue-500/25 transition-all">
+                        <button
+                            onClick={handleSendMessage}
+                            disabled={!inputValue.trim()}
+                            className={`p-3 rounded-lg shadow-lg transition-all ${inputValue.trim()
+                                    ? 'bg-blue-600 hover:bg-blue-500 text-white hover:shadow-blue-500/25'
+                                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                }`}
+                        >
                             <Send size={18} />
                         </button>
                     </div>

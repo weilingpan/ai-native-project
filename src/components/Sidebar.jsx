@@ -8,21 +8,37 @@ import {
     Home,
     User,
     PlusCircle,
-    Search
 } from 'lucide-react';
 import classNames from 'classnames';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-const Sidebar = ({ activeItem, onNavigate }) => {
+const Sidebar = () => {
     const [isOpen, setIsOpen] = useState(true);
+    const navigate = useNavigate();
+    const location = useLocation();
 
     const navItems = [
-        { id: 'home', icon: Home, label: 'Dashboard' },
-        { id: 'chat', icon: MessageSquare, label: 'Chat Session' },
-        { id: 'profile', icon: User, label: 'Profile' },
-        { id: 'settings', icon: Settings, label: 'Settings' },
+        { id: 'home', icon: Home, label: 'Dashboard', path: '/' },
+        { id: 'chat', icon: MessageSquare, label: 'Chat Session', path: '/chat_session' },
+        { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
+        { id: 'settings', icon: Settings, label: 'Settings', path: '/settings' },
     ];
 
+    const getActiveItem = () => {
+        const currentPath = location.pathname;
+        if (currentPath === '/') return 'home';
+        if (currentPath.startsWith('/chat_session')) return 'chat';
+        const found = navItems.find(item => item.path !== '/' && currentPath.startsWith(item.path));
+        return found ? found.id : '';
+    };
+
+    const activeItem = getActiveItem();
+
     const toggleSidebar = () => setIsOpen(!isOpen);
+
+    const handleNavigation = (path) => {
+        navigate(path);
+    };
 
     return (
         <motion.div
@@ -62,6 +78,7 @@ const Sidebar = ({ activeItem, onNavigate }) => {
             {/* New Chat Button */}
             <div className="p-4">
                 <button
+                    onClick={() => handleNavigation('/chat_session')}
                     className={classNames(
                         "w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white rounded-xl p-3 shadow-lg transition-all duration-300 group",
                         { 'px-0': !isOpen }
@@ -77,7 +94,7 @@ const Sidebar = ({ activeItem, onNavigate }) => {
                 {navItems.map((item) => (
                     <div
                         key={item.id}
-                        onClick={() => onNavigate(item.id)}
+                        onClick={() => handleNavigation(item.path)}
                         className={classNames(
                             "flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all duration-200 group relative",
                             {
