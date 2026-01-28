@@ -46,6 +46,10 @@ const ChatInterface = () => {
     const [copiedMessageId, setCopiedMessageId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
+    // Delete Confirmation State
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [sessionToDelete, setSessionToDelete] = useState(null);
+
     // Fetch Models on Component Mount
     useEffect(() => {
         const fetchModels = async () => {
@@ -180,18 +184,35 @@ const ChatInterface = () => {
 
     const handleDeleteSession = (e, sessionId) => {
         e.stopPropagation();
-        const newSessions = sessions.filter(s => s.id !== sessionId);
+        setSessionToDelete(sessionId);
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDeleteSession = () => {
+        if (!sessionToDelete) return;
+
+        const newSessions = sessions.filter(s => s.id !== sessionToDelete);
         if (newSessions.length === 0) {
             // Keep at least one session
-            const newSession = { id: Date.now(), title: 'New Chat', description: 'New conversation started', model: 'gpt-5-nano', messages: [], timestamp: new Date() };
+            const newSession = {
+                id: Date.now(),
+                title: 'New Chat',
+                description: 'New conversation started',
+                model: 'gpt-5-nano',
+                messages: [],
+                timestamp: new Date(),
+                createdAt: new Date().toISOString()
+            };
             setSessions([newSession]);
             setActiveSessionId(newSession.id);
         } else {
             setSessions(newSessions);
-            if (activeSessionId === sessionId) {
+            if (activeSessionId === sessionToDelete) {
                 setActiveSessionId(newSessions[0].id);
             }
         }
+        setIsDeleteModalOpen(false);
+        setSessionToDelete(null);
     };
 
     const handleStartRename = (e, session) => {
@@ -287,9 +308,6 @@ const ChatInterface = () => {
             id: Date.now(),
             text: currentInput,
             sender: 'user',
-            id: Date.now(),
-            text: currentInput,
-            sender: 'user',
             timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
             createdAt: new Date().toISOString()
         };
@@ -297,8 +315,6 @@ const ChatInterface = () => {
         const botMsgId = Date.now() + 1;
         const initialBotMessage = {
             id: botMsgId,
-            text: '', // Start empty
-            sender: 'bot',
             text: '', // Start empty
             sender: 'bot',
             timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
@@ -1056,7 +1072,44 @@ const ChatInterface = () => {
                     document.body
                 )
             }
-        </div >
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {isDeleteModalOpen && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6 text-center">
+                                <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 ring-1 ring-red-500/20">
+                                    <Trash2 size={32} />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Delete Chat?</h3>
+                                <p className="text-slate-400 text-sm mb-6">
+                                    Are you sure you want to delete this chat session? This action cannot be undone.
+                                </p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setIsDeleteModalOpen(false)}
+                                        className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-medium hover:bg-slate-700 transition-all border border-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmDeleteSession}
+                                        className="flex-1 py-2.5 rounded-xl bg-red-600 text-white font-medium hover:bg-red-500 transition-all shadow-lg shadow-red-900/20"
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+        </div>
     );
 };
 
