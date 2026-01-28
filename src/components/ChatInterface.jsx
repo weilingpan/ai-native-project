@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -856,12 +856,17 @@ const ChatInterface = () => {
 
                 {/* Input Area */}
                 <div className="p-4 md:p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
-                    <div className="max-w-4xl mx-auto relative group">
-                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover:opacity-100 duration-500"></div>
+                    <div className="max-w-4xl mx-auto relative group/input-container">
+                        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover/input-container:opacity-100 duration-500"></div>
                         <div className="relative flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
-                            <button className="p-2 md:p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
-                                <Paperclip size={20} />
-                            </button>
+                            <div className="relative group">
+                                <button className="p-2 md:p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+                                    <Paperclip size={20} />
+                                </button>
+                                <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                                    Feature Coming Soon
+                                </span>
+                            </div>
                             <textarea
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
@@ -869,6 +874,14 @@ const ChatInterface = () => {
                                 placeholder="Message..."
                                 className="flex-1 bg-transparent border-none focus:ring-0 text-slate-200 placeholder-slate-500 resize-none h-10 md:h-12 py-2 md:py-3 max-h-32 focus:outline-none"
                             />
+                            <div className="relative group">
+                                <button className="p-2 md:p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
+                                    <Mic size={20} />
+                                </button>
+                                <span className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-slate-900 border border-slate-700 text-slate-300 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
+                                    Feature Coming Soon
+                                </span>
+                            </div>
                             <button
                                 onClick={handleSendMessage}
                                 disabled={!inputValue.trim()}
