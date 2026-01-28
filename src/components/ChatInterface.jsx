@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -40,6 +40,7 @@ const ChatInterface = () => {
     const [targetSessionId, setTargetSessionId] = useState(null);
     const [availableModels, setAvailableModels] = useState([]); // State for API models
     const [loadingModels, setLoadingModels] = useState(true);
+    const [copiedMessageId, setCopiedMessageId] = useState(null);
 
     // Fetch Models on Component Mount
     useEffect(() => {
@@ -215,6 +216,12 @@ const ChatInterface = () => {
         }
     };
 
+    const handleCopyMessage = (text, id) => {
+        navigator.clipboard.writeText(text);
+        setCopiedMessageId(id);
+        setTimeout(() => setCopiedMessageId(null), 2000);
+    };
+
     const handleSendMessage = async () => {
         if (!inputValue.trim()) return;
 
@@ -225,7 +232,7 @@ const ChatInterface = () => {
             id: Date.now(),
             text: currentInput,
             sender: 'user',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
         };
 
         const botMsgId = Date.now() + 1;
@@ -233,7 +240,7 @@ const ChatInterface = () => {
             id: botMsgId,
             text: '', // Start empty
             sender: 'bot',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
             model: activeSession?.model || "gpt-5-nano",
             startTime: Date.now(),
             isStreaming: true // Optional flag for UI loading state if desired
@@ -608,13 +615,24 @@ const ChatInterface = () => {
                                             </span>
                                         )}
                                     </div>
-                                    <div className={`space-y-2 max-w-[80%] md:max-w-[80%]`}>
+                                    <div className={`space-y-2 max-w-[80%] md:max-w-[80%] group relative`}>
                                         <div className={`p-3 md:p-4 rounded-2xl shadow-md text-sm md:text-base ${message.sender === 'user'
                                             ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
                                             : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
                                             }`}>
                                             {message.sender === 'user' || message.text ? (
-                                                <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                                <div className="relative">
+                                                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                                    <button
+                                                        onClick={() => handleCopyMessage(message.text, message.id)}
+                                                        className={`absolute top-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm border border-slate-700/50 ${message.sender === 'user'
+                                                                ? 'left-0 -translate-x-[calc(100%+8px)]'
+                                                                : 'right-0 translate-x-[calc(100%+8px)]'
+                                                            }`}
+                                                    >
+                                                        {copiedMessageId === message.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                                                    </button>
+                                                </div>
                                             ) : (
                                                 <div className="flex gap-1 h-5 items-center px-1">
                                                     <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
