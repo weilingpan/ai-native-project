@@ -121,7 +121,7 @@ const Sidebar = () => {
                         className="font-bold text-xl text-white tracking-wide flex items-center gap-2"
                     >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-                            <span className="text-sm">AI</span>
+                            <span className="text-lg font-bold">A</span>
                         </div>
                         <AnimatePresence>
                             {isOpen && (
@@ -129,9 +129,9 @@ const Sidebar = () => {
                                     initial={{ opacity: 0, width: 0 }}
                                     animate={{ opacity: 1, width: "auto" }}
                                     exit={{ opacity: 0, width: 0 }}
-                                    className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 whitespace-nowrap overflow-hidden"
+                                    className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 whitespace-nowrap overflow-hidden flex items-center"
                                 >
-                                    Regina
+                                    Reg<span className="text-cyan-400 font-mono text-2xl font-bold mx-0.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">I</span>na
                                 </motion.span>
                             )}
                         </AnimatePresence>
