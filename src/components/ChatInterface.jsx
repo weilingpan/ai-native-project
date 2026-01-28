@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -43,6 +43,7 @@ const ChatInterface = () => {
     const [availableModels, setAvailableModels] = useState([]); // State for API models
     const [loadingModels, setLoadingModels] = useState(true);
     const [copiedMessageId, setCopiedMessageId] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Fetch Models on Component Mount
     useEffect(() => {
@@ -496,10 +497,22 @@ const ChatInterface = () => {
                     {isMobile && (
                         <p className="text-center text-xs text-slate-500 mt-4">Select a chat to start messaging</p>
                     )}
+
+                    {/* Search Bar */}
+                    <div className="relative mt-3">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search chats..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2 pl-9 pr-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                        />
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar">
-                    {sessions.map(session => (
+                    {sessions.filter(session => session.title.toLowerCase().includes(searchQuery.toLowerCase())).map(session => (
                         <div
                             key={session.id}
                             onClick={() => handleSessionSelect(session.id)}
