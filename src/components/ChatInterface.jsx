@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -12,7 +12,8 @@ const ChatInterface = () => {
             model: 'gpt-5-nano',
             type: 'chat', // 'chat' | 'image'
             messages: [],
-            timestamp: new Date()
+            timestamp: new Date(),
+            createdAt: new Date().toISOString()
         }
     ]);
     const [activeSessionId, setActiveSessionId] = useState(1);
@@ -244,6 +245,32 @@ const ChatInterface = () => {
         }
     };
 
+    const handleExportChat = () => {
+        if (!activeSession) return;
+
+        const content = activeSession.messages.map(m => {
+            const role = m.sender === 'user' ? 'User' : 'Regina';
+            const time = m.createdAt ? new Date(m.createdAt).toLocaleString() : m.timestamp;
+            let text = m.text;
+            if (m.imageUrl) {
+                text = `[Generated Image](${m.imageUrl})\n> *Prompt: ${m.text}*`;
+            }
+            return `### ${role} (${time})\n\n${text}\n\n---\n`;
+        }).join('\n');
+
+        const header = `# ${activeSession.title}\n\n*Session ID: ${activeSession.id}* - *Date: ${new Date(activeSession.timestamp).toLocaleString()}*\n\n---\n\n`;
+
+        const blob = new Blob([header + content], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${activeSession.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.md`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
     const handleCopyMessage = (text, id) => {
         navigator.clipboard.writeText(text);
         setCopiedMessageId(id);
@@ -260,7 +287,11 @@ const ChatInterface = () => {
             id: Date.now(),
             text: currentInput,
             sender: 'user',
-            timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+            id: Date.now(),
+            text: currentInput,
+            sender: 'user',
+            timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            createdAt: new Date().toISOString()
         };
 
         const botMsgId = Date.now() + 1;
@@ -268,7 +299,10 @@ const ChatInterface = () => {
             id: botMsgId,
             text: '', // Start empty
             sender: 'bot',
+            text: '', // Start empty
+            sender: 'bot',
             timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+            createdAt: new Date().toISOString(),
             model: activeSession?.model || "gpt-5-nano",
             startTime: Date.now(),
             isStreaming: true // Optional flag for UI loading state if desired
@@ -630,6 +664,16 @@ const ChatInterface = () => {
                                             >
                                                 <Plus size={16} />
                                                 New Chat
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    handleExportChat();
+                                                    setIsHeaderMenuOpen(false);
+                                                }}
+                                                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                                            >
+                                                <FileText size={16} />
+                                                Export Chat
                                             </button>
                                             <button
                                                 onClick={(e) => {
