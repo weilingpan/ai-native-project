@@ -7,10 +7,10 @@ export default defineConfig({
     server: {
         host: '0.0.0.0', // Ensure it binds correctly if needed
         proxy: {
-            '/api': {
+            '/llm_openai': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
-                rewrite: (path) => path.replace(/^\/api/, ''),
+                // rewrite: (path) => path.replace(/^\/llm_openai/, ''),
             },
         },
     },
