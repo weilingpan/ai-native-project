@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -10,6 +10,7 @@ const ChatInterface = () => {
             title: 'New Chat',
             description: 'New conversation started',
             model: 'gpt-5-nano',
+            type: 'chat', // 'chat' | 'image'
             messages: [],
             timestamp: new Date()
         }
@@ -26,6 +27,7 @@ const ChatInterface = () => {
     // New State for Features
     const [isModelModalOpen, setIsModelModalOpen] = useState(false);
     const [selectedModel, setSelectedModel] = useState('gpt-5-nano');
+    const [selectedType, setSelectedType] = useState('chat'); // 'chat' | 'image'
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDescription, setNewSessionDescription] = useState('');
     const [hoveredSessionId, setHoveredSessionId] = useState(null);
@@ -98,6 +100,7 @@ const ChatInterface = () => {
         setModalMode('create');
         setNewSessionTitle('');
         setNewSessionDescription('');
+        setSelectedType('chat');
         setSelectedModel('gpt-5-nano');
         setIsModelModalOpen(true);
     };
@@ -108,6 +111,7 @@ const ChatInterface = () => {
         setTargetSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDescription(session.description);
+        setSelectedType(session.type || 'chat');
         setSelectedModel(session.model || 'gpt-5-nano');
         setIsModelModalOpen(true);
     };
@@ -120,6 +124,7 @@ const ChatInterface = () => {
                 title: newSessionTitle || 'New Chat',
                 description: newSessionDescription || 'New conversation started',
                 model: selectedModel,
+                type: selectedType,
                 messages: [],
                 timestamp: new Date()
             };
@@ -136,7 +141,8 @@ const ChatInterface = () => {
                         ...s,
                         title: newSessionTitle || s.title,
                         description: newSessionDescription || s.description,
-                        model: selectedModel
+                        model: selectedModel,
+                        type: selectedType
                     }
                     : s
             ));
@@ -260,6 +266,71 @@ const ChatInterface = () => {
             }
             return session;
         }));
+
+        // Handle Image Generation Mode
+        if (activeSession.type === 'image') {
+            try {
+                const response = await fetch('/llm_openai/generate/image', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        prompt: currentInput,
+                        model: "dall-e-3"
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Image Gen Error: ${response.status}`);
+                }
+
+                const data = await response.json();
+                const imageUrl = data.data?.[0]?.url || data.url || data.image_url;
+
+                if (!imageUrl) throw new Error("No image URL in response");
+
+                const duration = ((Date.now() - initialBotMessage.startTime) / 1000).toFixed(2);
+
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return {
+                            ...s,
+                            messages: s.messages.map(m =>
+                                m.id === botMsgId
+                                    ? {
+                                        ...m,
+                                        text: `Generated Image for: "${currentInput}"`,
+                                        imageUrl: imageUrl,
+                                        duration: duration,
+                                        isStreaming: false
+                                    }
+                                    : m
+                            )
+                        };
+                    }
+                    return s;
+                }));
+
+            } catch (error) {
+                console.error("Image Gen Failed:", error);
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return {
+                            ...s,
+                            messages: s.messages.map(m =>
+                                m.id === botMsgId
+                                    ? { ...m, text: `Error generating image: ${error.message}`, isStreaming: false }
+                                    : m
+                            )
+                        };
+                    }
+                    return s;
+                }));
+            }
+            return; // Exit function, don't do chat API call
+        }
 
         try {
             // 2. Call API (Using proxy: /api -> http://127.0.0.1:8000)
@@ -419,55 +490,37 @@ const ChatInterface = () => {
                                 }`}
                         >
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
-                                {editingSessionId === session.id ? (
-                                    <input
-                                        type="text"
-                                        value={editTitleValue}
-                                        onChange={(e) => setEditTitleValue(e.target.value)}
-                                        onKeyDown={handleRenameKeyDown}
-                                        onClick={(e) => e.stopPropagation()} // Prevent selecting session while clicking input
-                                        onBlur={handleSaveRename}
-                                        autoFocus
-                                        className="bg-slate-900 border border-blue-500/50 rounded px-1.5 py-0.5 text-sm w-full focus:outline-none text-white"
-                                    />
+                                {session.type === 'image' ? (
+                                    <ImageIcon size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 ) : (
-                                    <span className="truncate text-sm font-medium">{session.title}</span>
+                                    <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 )}
+                                <span className="truncate text-sm font-medium">{session.title}</span>
                             </div>
-                            {editingSessionId !== session.id && (
-                                <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={(e) => handleStartRename(e, session)}
-                                        className="p-1.5 rounded-md hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
-                                        title="Rename"
-                                    >
-                                        <Pencil size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => handleOpenEditModal(e, session)}
-                                        className="p-1.5 rounded-md hover:bg-slate-700 hover:text-slate-200 transition-colors"
-                                        title="Settings"
-                                    >
-                                        <Settings size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => handleClearSession(e, session.id)}
-                                        className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
-                                        title="Clear Chat History"
-                                    >
-                                        <Eraser size={14} />
-                                    </button>
-                                    <button
-                                        onClick={(e) => handleDeleteSession(e, session.id)}
-                                        className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors ${sessions.length === 1 ? 'hidden' : ''
-                                            }`}
-                                        title="Delete Chat"
-                                    >
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            )}
+                            <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={(e) => handleOpenEditModal(e, session)}
+                                    className="p-1.5 rounded-md hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                    title="Settings"
+                                >
+                                    <Settings size={14} />
+                                </button>
+                                <button
+                                    onClick={(e) => handleClearSession(e, session.id)}
+                                    className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
+                                    title="Clear Chat History"
+                                >
+                                    <Eraser size={14} />
+                                </button>
+                                <button
+                                    onClick={(e) => handleDeleteSession(e, session.id)}
+                                    className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors ${sessions.length === 1 ? 'hidden' : ''
+                                        }`}
+                                    title="Delete Chat"
+                                >
+                                    <Trash2 size={14} />
+                                </button>
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -620,18 +673,28 @@ const ChatInterface = () => {
                                             ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
                                             : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
                                             }`}>
-                                            {message.sender === 'user' || message.text ? (
+                                            {message.sender === 'user' || (message.text && !message.imageUrl) ? (
                                                 <div className="relative">
                                                     <p className="whitespace-pre-wrap break-words">{message.text}</p>
                                                     <button
                                                         onClick={() => handleCopyMessage(message.text, message.id)}
                                                         className={`absolute top-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm border border-slate-700/50 ${message.sender === 'user'
-                                                                ? 'left-0 -translate-x-[calc(100%+8px)]'
-                                                                : 'right-0 translate-x-[calc(100%+8px)]'
+                                                            ? 'left-0 -translate-x-[calc(100%+8px)]'
+                                                            : 'right-0 translate-x-[calc(100%+8px)]'
                                                             }`}
                                                     >
                                                         {copiedMessageId === message.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
                                                     </button>
+                                                </div>
+                                            ) : message.imageUrl ? (
+                                                <div className="space-y-2">
+                                                    <img
+                                                        src={message.imageUrl}
+                                                        alt="Generated"
+                                                        className="rounded-lg max-w-full md:max-w-sm border border-slate-700/50 shadow-sm"
+                                                        loading="lazy"
+                                                    />
+                                                    <p className="text-xs text-slate-400 italic">{message.text}</p>
                                                 </div>
                                             ) : (
                                                 <div className="flex gap-1 h-5 items-center px-1">
@@ -709,6 +772,39 @@ const ChatInterface = () => {
                             </div>
 
                             <div className="p-6 space-y-6">
+                                {/* Type Selection */}
+                                <div className="space-y-4">
+                                    <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Session Type</label>
+                                    <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
+                                        <button
+                                            onClick={() => {
+                                                setSelectedType('chat');
+                                                setSelectedModel('gpt-5-nano');
+                                            }}
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === 'chat'
+                                                ? 'bg-slate-700 text-white shadow-sm'
+                                                : 'text-slate-400 hover:text-slate-200'
+                                                }`}
+                                        >
+                                            <MessageSquare size={16} />
+                                            Chat
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedType('image');
+                                                setSelectedModel('dall-e-3'); // Default for image
+                                            }}
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === 'image'
+                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                : 'text-slate-400 hover:text-slate-200'
+                                                }`}
+                                        >
+                                            <ImageIcon size={16} />
+                                            Image Generation
+                                        </button>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-4">
                                     <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Title (Optional)</label>
                                     <input
@@ -733,42 +829,54 @@ const ChatInterface = () => {
 
                                 <div className="space-y-4">
                                     <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Select Model</label>
-                                    <div className="grid gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
-                                        {loadingModels ? (
-                                            <div className="text-slate-400 text-center py-4">Loading models...</div>
-                                        ) : availableModels.length === 0 ? (
-                                            <div className="text-slate-400 text-center py-4">No models available.</div>
-                                        ) : (
-                                            availableModels.map((model) => (
-                                                <div
-                                                    key={model.name}
-                                                    onClick={() => setSelectedModel(model.name)}
-                                                    className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-4 ${selectedModel === model.name
-                                                        ? 'bg-blue-600/10 border-blue-500/50 shadow-inner'
-                                                        : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
-                                                        }`}
-                                                >
-                                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedModel === model.name ? 'border-blue-500' : 'border-slate-500'
-                                                        }`}>
-                                                        {selectedModel === model.name && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className={`font-medium truncate ${selectedModel === model.name ? 'text-blue-400' : 'text-slate-200'}`}>
-                                                            {model.name}
+                                    {selectedType === 'chat' ? (
+                                        <div className="grid gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
+                                            {loadingModels ? (
+                                                <div className="text-slate-400 text-center py-4">Loading models...</div>
+                                            ) : availableModels.length === 0 ? (
+                                                <div className="text-slate-400 text-center py-4">No models available for this type.</div>
+                                            ) : (
+                                                availableModels.map((model) => (
+                                                    <div
+                                                        key={model.name}
+                                                        onClick={() => setSelectedModel(model.name)}
+                                                        className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center gap-4 ${selectedModel === model.name
+                                                            ? 'bg-blue-600/10 border-blue-500/50 shadow-inner'
+                                                            : 'bg-slate-800/50 border-slate-700/50 hover:bg-slate-800 hover:border-slate-600'
+                                                            }`}
+                                                    >
+                                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 ${selectedModel === model.name ? 'border-blue-500' : 'border-slate-500'
+                                                            }`}>
+                                                            {selectedModel === model.name && <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />}
                                                         </div>
-                                                        <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
-                                                            <span className="bg-slate-700/50 px-1.5 py-0.5 rounded text-[10px] text-slate-400 border border-slate-700">
-                                                                In: {model.pricing?.input}
-                                                            </span>
-                                                            <span className="bg-slate-700/50 px-1.5 py-0.5 rounded text-[10px] text-slate-400 border border-slate-700">
-                                                                Out: {model.pricing?.output}
-                                                            </span>
+                                                        <div className="min-w-0">
+                                                            <div className={`font-medium truncate ${selectedModel === model.name ? 'text-blue-400' : 'text-slate-200'}`}>
+                                                                {model.name}
+                                                            </div>
+                                                            <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                                                                <span className="bg-slate-700/50 px-1.5 py-0.5 rounded text-[10px] text-slate-400 border border-slate-700">
+                                                                    In: {model.pricing?.input}
+                                                                </span>
+                                                                <span className="bg-slate-700/50 px-1.5 py-0.5 rounded text-[10px] text-slate-400 border border-slate-700">
+                                                                    Out: {model.pricing?.output}
+                                                                </span>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            ))
-                                        )}
-                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 rounded-xl border border-blue-500/50 bg-blue-600/10 flex items-center gap-4">
+                                            <div className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center shrink-0">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-blue-400">DALL-E 3</div>
+                                                <div className="text-xs text-slate-500">Standard Image Generation Model</div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
