@@ -234,6 +234,8 @@ const ChatInterface = () => {
             text: '', // Start empty
             sender: 'bot',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            model: activeSession?.model || "gpt-5-nano",
+            startTime: Date.now(),
             isStreaming: true // Optional flag for UI loading state if desired
         };
 
@@ -280,7 +282,23 @@ const ChatInterface = () => {
 
             while (true) {
                 const { done, value } = await reader.read();
-                if (done) break;
+                if (done) {
+                    const duration = ((Date.now() - initialBotMessage.startTime) / 1000).toFixed(2);
+                    setSessions(prev => prev.map(s => {
+                        if (s.id === activeSessionId) {
+                            return {
+                                ...s,
+                                messages: s.messages.map(m =>
+                                    m.id === botMsgId
+                                        ? { ...m, duration: duration, isStreaming: false }
+                                        : m
+                                )
+                            };
+                        }
+                        return s;
+                    }));
+                    break;
+                }
 
                 const chunk = decoder.decode(value, { stream: true });
                 buffer += chunk;
@@ -577,11 +595,18 @@ const ChatInterface = () => {
                                     animate={{ opacity: 1, y: 0 }}
                                     className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
                                 >
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${message.sender === 'user'
-                                        ? 'bg-purple-500/20 text-purple-400'
-                                        : 'bg-blue-500/20 text-blue-400'
-                                        }`}>
-                                        {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
+                                    <div className="flex flex-col items-center gap-1 shrink-0 mt-1">
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${message.sender === 'user'
+                                            ? 'bg-purple-500/20 text-purple-400'
+                                            : 'bg-blue-500/20 text-blue-400'
+                                            }`}>
+                                            {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
+                                        </div>
+                                        {message.sender === 'bot' && message.model && (
+                                            <span className="text-[10px] text-slate-500 font-medium tracking-tight uppercase text-center max-w-[6rem] leading-none">
+                                                {message.model}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className={`space-y-2 max-w-[80%] md:max-w-[80%]`}>
                                         <div className={`p-3 md:p-4 rounded-2xl shadow-md text-sm md:text-base ${message.sender === 'user'
@@ -598,9 +623,14 @@ const ChatInterface = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        <span className={`text-xs text-slate-500 px-1 block ${message.sender === 'user' ? 'text-right' : ''}`}>
-                                            {message.timestamp}
-                                        </span>
+                                        <div className={`flex items-center gap-2 text-xs text-slate-500 px-1 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <span>{message.timestamp}</span>
+                                            {message.duration && (
+                                                <span className="text-slate-600 bg-slate-800/50 px-1.5 rounded border border-slate-700/50">
+                                                    {message.duration}s
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </motion.div>
                             ))}
