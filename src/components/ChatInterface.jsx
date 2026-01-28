@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -219,6 +219,27 @@ const ChatInterface = () => {
             handleSaveRename(e);
         } else if (e.key === 'Escape') {
             handleCancelRename();
+        }
+    };
+
+    const handleDownloadImage = async (imageUrl, fileName) => {
+        try {
+            // Use local proxy to bypass CORS restrictions
+            const proxyUrl = `/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Proxy fetch failed');
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName || `generated-image-${Date.now()}.png`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error('Download failed:', error);
+            window.open(imageUrl, '_blank');
         }
     };
 
@@ -639,13 +660,41 @@ const ChatInterface = () => {
                 {/* Messages Area */}
                 <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
                     {activeSession?.messages.length === 0 ? (
-                        <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
-                            <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700">
-                                <Bot size={40} className="text-blue-500" />
+                        activeSession?.type === 'image' ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                                <div className="w-20 h-20 bg-blue-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-blue-500/30">
+                                    <ImageIcon size={40} className="text-blue-500" />
+                                </div>
+                                <h3 className="text-xl font-medium text-slate-300 mb-2">Generate Images</h3>
+                                <p className="text-sm text-slate-500 mb-8">Describe what you want to see.</p>
+
+                                <div className="grid gap-3 w-full max-w-md px-4">
+                                    {[
+                                        "A futuristic city with flying cars at sunset",
+                                        "A cute golden retriever puppy riding a skateboard",
+                                        "An oil painting of a cozy cottage in the woods"
+                                    ].map((prompt, i) => (
+                                        <button
+                                            key={i}
+                                            onClick={() => setInputValue(prompt)}
+                                            className="p-3 rounded-xl bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 hover:border-slate-600 transition-all text-sm text-slate-300 hover:text-white text-left"
+                                        >
+                                            <span className="text-blue-400 mr-2">"</span>
+                                            {prompt}
+                                            <span className="text-blue-400 ml-2">"</span>
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                            <h3 className="text-xl font-medium text-slate-300 mb-2">How can I help you?</h3>
-                            <p className="text-sm text-slate-500">I can help you create, design, and code.</p>
-                        </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
+                                <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700">
+                                    <Bot size={40} className="text-blue-500" />
+                                </div>
+                                <h3 className="text-xl font-medium text-slate-300 mb-2">How can I help you?</h3>
+                                <p className="text-sm text-slate-500">I can help you create, design, and code.</p>
+                            </div>
+                        )
                     ) : (
                         <AnimatePresence initial={false}>
                             {activeSession?.messages.map((message) => (
@@ -688,12 +737,24 @@ const ChatInterface = () => {
                                                 </div>
                                             ) : message.imageUrl ? (
                                                 <div className="space-y-2">
-                                                    <img
-                                                        src={message.imageUrl}
-                                                        alt="Generated"
-                                                        className="rounded-lg max-w-full md:max-w-sm border border-slate-700/50 shadow-sm"
-                                                        loading="lazy"
-                                                    />
+                                                    <div className="relative group/image inline-block rounded-lg overflow-hidden">
+                                                        <img
+                                                            src={message.imageUrl}
+                                                            alt="Generated"
+                                                            className="max-w-full md:max-w-sm border border-slate-700/50 shadow-sm"
+                                                            loading="lazy"
+                                                        />
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDownloadImage(message.imageUrl, `generated-${message.id}.png`);
+                                                            }}
+                                                            className="absolute top-2 right-2 p-2 rounded-lg bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-all z-10 opacity-100 shadow-md border border-white/10"
+                                                            title="Download Image"
+                                                        >
+                                                            <Download size={18} />
+                                                        </button>
+                                                    </div>
                                                     <p className="text-xs text-slate-400 italic">{message.text}</p>
                                                 </div>
                                             ) : (
