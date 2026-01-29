@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic, AudioWaveform, ArrowDown, Play, Pause } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic, AudioWaveform, ArrowDown, Play, Pause, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
@@ -789,7 +789,10 @@ const ChatInterface = () => {
                             </div>
                             <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
                                 <button
-                                    onClick={(e) => handleOpenEditModal(e, session)}
+                                    onClick={(e) => {
+                                        handleSessionSelect(session.id);
+                                        handleOpenEditModal(e, session);
+                                    }}
                                     className="p-1.5 rounded-md hover:bg-slate-700 hover:text-slate-200 transition-colors"
                                     title="Settings"
                                 >
@@ -1202,6 +1205,7 @@ const ChatInterface = () => {
                                     <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Session Type</label>
                                     <div className="flex bg-slate-800/50 p-1 rounded-xl border border-slate-700/50">
                                         <button
+                                            disabled={modalMode === 'edit'}
                                             onClick={() => {
                                                 setSelectedType('chat');
                                                 setSelectedModel('gpt-5-nano');
@@ -1209,12 +1213,13 @@ const ChatInterface = () => {
                                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'chat'
                                                 ? 'bg-slate-700 text-white shadow-sm'
                                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
-                                                }`}
+                                                } ${modalMode === 'edit' ? 'disabled:cursor-not-allowed disabled:opacity-50' : ''}`}
                                         >
                                             <MessageSquare size={16} />
                                             Chat
                                         </button>
                                         <button
+                                            disabled={modalMode === 'edit'}
                                             onClick={() => {
                                                 setSelectedType('image');
                                                 setSelectedModel('dall-e-3'); // Default for image
@@ -1222,12 +1227,13 @@ const ChatInterface = () => {
                                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'image'
                                                 ? 'bg-blue-600 text-white shadow-sm'
                                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
-                                                }`}
+                                                } ${modalMode === 'edit' ? 'disabled:cursor-not-allowed disabled:opacity-50' : ''}`}
                                         >
                                             <ImageIcon size={16} />
                                             Image
                                         </button>
                                         <button
+                                            disabled={modalMode === 'edit'}
                                             onClick={() => {
                                                 setSelectedType('audio');
                                                 setSelectedModel('gpt-4o-mini-tts');
@@ -1235,7 +1241,7 @@ const ChatInterface = () => {
                                             className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'audio'
                                                 ? 'bg-purple-600 text-white shadow-sm'
                                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
-                                                }`}
+                                                } ${modalMode === 'edit' ? 'disabled:cursor-not-allowed disabled:opacity-50' : ''}`}
                                         >
                                             <AudioWaveform size={16} />
                                             Voice
@@ -1315,40 +1321,38 @@ const ChatInterface = () => {
                                             </div>
                                         </div>
                                     ) : selectedType === 'audio' ? (
-                                        <div className="space-y-4">
-                                            <div className="p-4 rounded-xl border border-purple-500/50 bg-purple-600/10 flex items-center gap-4">
-                                                <div className="w-5 h-5 rounded-full border-2 border-purple-500 flex items-center justify-center shrink-0">
-                                                    <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                                        <div className="p-3 rounded-xl border border-purple-500/50 bg-purple-600/10 space-y-3">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center shrink-0 border border-purple-500/30">
+                                                    <AudioWaveform size={16} className="text-purple-400" />
                                                 </div>
                                                 <div>
-                                                    <div className="font-medium text-purple-400">GPT-4o Mini TTS</div>
-                                                    <div className="text-xs text-slate-500">Text-to-Speech Model</div>
+                                                    <div className="font-medium text-purple-400 text-sm">GPT-4o Mini TTS</div>
+                                                    <div className="text-[10px] text-slate-400">Text-to-Speech Model</div>
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
-                                                {availableVoices.length > 0 ? availableVoices.map((voice) => (
-                                                    <button
-                                                        key={voice}
-                                                        onClick={() => {
-                                                            if (modalMode === 'edit') {
-                                                                handleVoiceSelect(voice);
-                                                            } else {
-                                                                setSelectedVoice(voice);
-                                                            }
-                                                        }}
-                                                        className={`p-2 rounded-lg border text-xs font-medium capitalize transition-all ${(modalMode === 'create' ? selectedVoice : (activeSession?.voice || 'coral')) === voice
-                                                            ? 'bg-purple-600 border-purple-500 text-white shadow-sm'
-                                                            : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
-                                                            }`}
-                                                    >
-                                                        {voice}
-                                                    </button>
-                                                )) : (
-                                                    <div className="col-span-4 text-center text-slate-500 text-xs py-2">
-                                                        No voices loaded. Start a session to fetch.
-                                                    </div>
-                                                )}
+                                            <div className="relative">
+                                                <select
+                                                    value={modalMode === 'create' ? selectedVoice : (activeSession?.voice || 'coral')}
+                                                    onChange={(e) => {
+                                                        const val = e.target.value;
+                                                        if (modalMode === 'edit') handleVoiceSelect(val);
+                                                        else setSelectedVoice(val);
+                                                    }}
+                                                    className="w-full appearance-none bg-slate-900/50 border border-purple-500/30 text-slate-200 text-sm rounded-lg pl-3 pr-8 py-2 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all capitalize cursor-pointer hover:bg-slate-900/70"
+                                                >
+                                                    {availableVoices.length > 0 ? (
+                                                        availableVoices.map(voice => (
+                                                            <option key={voice} value={voice} className="bg-slate-900 text-slate-300 capitalize">
+                                                                {voice}
+                                                            </option>
+                                                        ))
+                                                    ) : (
+                                                        <option disabled>Loading voices...</option>
+                                                    )}
+                                                </select>
+                                                <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-purple-400/70 pointer-events-none" />
                                             </div>
                                         </div>
                                     ) : null}
