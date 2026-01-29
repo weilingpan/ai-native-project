@@ -888,11 +888,16 @@ const ChatInterface = () => {
                                                 New Chat
                                             </button>
                                             <button
+                                                disabled={activeSession?.type === 'audio'}
                                                 onClick={() => {
+                                                    if (activeSession?.type === 'audio') return;
                                                     handleExportChat();
                                                     setIsHeaderMenuOpen(false);
                                                 }}
-                                                className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                                                className={`w-full text-left px-4 py-3 text-sm flex items-center gap-2 ${activeSession?.type === 'audio'
+                                                    ? 'text-slate-600 cursor-not-allowed'
+                                                    : 'text-slate-200 hover:bg-slate-700/50'
+                                                    }`}
                                             >
                                                 <FileText size={16} />
                                                 Export Chat
