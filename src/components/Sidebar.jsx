@@ -8,6 +8,7 @@ import {
     Settings,
     Home,
     User,
+    LogOut,
     X
 } from 'lucide-react';
 import classNames from 'classnames';
@@ -20,6 +21,25 @@ const Sidebar = () => {
     const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
     const navigate = useNavigate();
     const location = useLocation();
+
+    const [userRole, setUserRole] = useState('User');
+    const [username, setUsername] = useState('Guest');
+
+    useEffect(() => {
+        // Fetch user info
+        const storedUsername = localStorage.getItem('username');
+        if (storedUsername) {
+            setUsername(storedUsername);
+            fetch(`/accounts/${storedUsername}`, {
+                headers: { 'accept': 'application/json' }
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.role) setUserRole(data.role);
+                })
+                .catch(err => console.error('Failed to fetch user info:', err));
+        }
+    }, []);
 
     useEffect(() => {
         const handleResize = () => {
@@ -37,11 +57,11 @@ const Sidebar = () => {
     }, []);
 
     const navItems = [
-        { id: 'home', icon: Home, label: 'Dashboard', path: '/' },
+        { id: 'home', icon: Home, label: 'Dashboard', path: '/', restricted: true },
         { id: 'chat', icon: MessageSquare, label: 'Chat Session', path: '/chat_session' },
         { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
-        { id: 'settings', icon: Settings, label: 'Settings', path: '/settings' },
-    ];
+        { id: 'settings', icon: Settings, label: 'Settings', path: '/settings', restricted: true },
+    ].filter(item => userRole === 'Admin' || !item.restricted);
 
     const getActiveItem = () => {
         const currentPath = location.pathname;
@@ -60,6 +80,14 @@ const Sidebar = () => {
         if (isMobile) setIsOpen(false); // Close sidebar on mobile navigation
     };
 
+    const handleLogout = () => {
+        if (window.confirm('Are you sure you want to log out?')) {
+            localStorage.removeItem('isAuthenticated');
+            localStorage.removeItem('token');
+            navigate('/login');
+        }
+    };
+
     const handleItemHover = (e, itemId) => {
         const rect = e.currentTarget.getBoundingClientRect();
         setTooltipPos({
@@ -68,6 +96,8 @@ const Sidebar = () => {
         });
         setHoveredItem(itemId);
     };
+
+
 
     // Sidebar Width Logic
     const sidebarWidth = isOpen ? 280 : (isMobile ? 0 : 80);
@@ -118,7 +148,8 @@ const Sidebar = () => {
                     }
                 )}>
                     <motion.div
-                        className="font-bold text-xl text-white tracking-wide flex items-center gap-2"
+                        className="font-bold text-xl text-white tracking-wide flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => handleNavigation('/')}
                     >
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
                             <span className="text-lg font-bold">A</span>
@@ -246,22 +277,34 @@ const Sidebar = () => {
                         "transition-all duration-300",
                         { 'p-4 pt-2': isOpen || isMobile, 'p-2': !isOpen && !isMobile }
                     )}>
-                        <div className={classNames(
-                            "flex items-center gap-3 p-2 rounded-xl hover:bg-slate-800/50 transition-colors cursor-pointer",
-                            { 'justify-center': !isOpen && !isMobile }
-                        )}>
-                            <img
-                                src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"
-                                alt="User"
-                                className="w-10 h-10 rounded-full bg-slate-600 border-2 border-slate-500 shrink-0"
-                            />
-                            {isOpen && (
-                                <div className="flex flex-col overflow-hidden">
-                                    <span className="text-sm font-semibold text-slate-200 truncate">Regina Admin</span>
-                                    <span className="text-xs text-slate-500 truncate">Pro Plan</span>
-                                </div>
+                        <button
+                            onClick={handleLogout}
+                            className={classNames(
+                                "w-full flex items-center gap-3 p-2 rounded-xl hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all cursor-pointer group text-left",
+                                { 'justify-center': !isOpen && !isMobile }
                             )}
-                        </div>
+                            title="Sign Out"
+                        >
+                            <div className="relative">
+                                <img
+                                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`}
+                                    alt="User"
+                                    className="w-10 h-10 rounded-full bg-slate-600 border-2 border-slate-500 shrink-0 group-hover:border-red-400 transition-colors"
+                                />
+                                {/* Status Indicator */}
+                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full"></div>
+                            </div>
+
+                            {isOpen && (
+                                <>
+                                    <div className="flex flex-col overflow-hidden flex-1">
+                                        <span className="text-sm font-semibold text-slate-200 truncate group-hover:text-red-200 transition-colors">{username}</span>
+                                        <span className="text-xs text-slate-500 truncate group-hover:text-red-300/70 transition-colors">{userRole}</span>
+                                    </div>
+                                    <LogOut size={18} className="text-slate-500 group-hover:text-red-400 transition-colors" />
+                                </>
+                            )}
+                        </button>
                     </div>
                 </div>
             </motion.div>

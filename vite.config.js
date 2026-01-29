@@ -59,6 +59,10 @@ export default defineConfig({
                 changeOrigin: true,
                 // rewrite: (path) => path.replace(/^\/llm_openai/, ''),
             },
+            '/accounts': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: true,
+            },
         },
     },
 })

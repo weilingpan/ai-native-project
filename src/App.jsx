@@ -3,15 +3,17 @@ import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import Dashboard from './components/Dashboard';
 import ComingSoon from './components/ComingSoon';
+import Login from './components/Login';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 
 function App() {
     const location = useLocation();
+    const isLoginPage = location.pathname === '/login';
 
     return (
         <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-text">
-            <Sidebar />
+            {!isLoginPage && <Sidebar />}
             <main className="flex-1 h-full min-w-0 flex flex-col relative">
                 {/* Subtle background gradient effects */}
                 <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
@@ -22,23 +24,30 @@ function App() {
                 {/* Content */}
                 <div className="relative z-10 w-full h-full flex flex-col">
                     <AnimatePresence mode='wait'>
-                        {/* We wrap Routes in motion.div based on key=location.pathname to animate page transitions if desired. 
-                   However, AnimatePresence needs a direct child with key. The Routes component switches children. 
-                   Common pattern is: <Routes location={location} key={location.pathname}>... 
-               */}
                         <Routes location={location} key={location.pathname}>
+                            <Route path="/login" element={
+                                <Login />
+                            } />
+
                             <Route path="/" element={
-                                <PageWrapper>
-                                    <Dashboard />
-                                </PageWrapper>
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <Dashboard />
+                                    </PageWrapper>
+                                </RequireAuth>
                             } />
                             <Route path="/chat_session" element={
-                                <PageWrapper>
-                                    <ChatInterface />
-                                </PageWrapper>
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <ChatInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
                             } />
+
                             <Route path="*" element={
-                                <ComingSoon />
+                                <RequireAuth>
+                                    <ComingSoon />
+                                </RequireAuth>
                             } />
                         </Routes>
                     </AnimatePresence>
@@ -47,6 +56,17 @@ function App() {
         </div>
     )
 }
+
+// Protected Route Component
+const RequireAuth = ({ children }) => {
+    const isAuthenticated = localStorage.getItem('isAuthenticated');
+
+    if (!isAuthenticated) {
+        return <Navigate to="/login" replace />;
+    }
+
+    return children;
+};
 
 // Helper wrapper for page transition animations
 const PageWrapper = ({ children }) => (
