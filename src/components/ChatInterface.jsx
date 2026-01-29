@@ -165,6 +165,8 @@ const ChatInterface = () => {
     // Delete Confirmation State
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
+    const [isClearModalOpen, setIsClearModalOpen] = useState(false);
+    const [sessionToClear, setSessionToClear] = useState(null);
 
     // Fetch Models on Component Mount
     useEffect(() => {
@@ -334,12 +336,21 @@ const ChatInterface = () => {
 
     const handleClearSession = (e, sessionId) => {
         e.stopPropagation();
-        setSessions(prev => prev.map(s => {
-            if (s.id === sessionId) {
-                return { ...s, messages: [] };
-            }
-            return s;
-        }));
+        setSessionToClear(sessionId);
+        setIsClearModalOpen(true);
+    };
+
+    const confirmClearSession = () => {
+        if (sessionToClear) {
+            setSessions(prev => prev.map(s => {
+                if (s.id === sessionToClear) {
+                    return { ...s, messages: [] };
+                }
+                return s;
+            }));
+            setSessionToClear(null);
+            setIsClearModalOpen(false);
+        }
     };
 
     const handleDeleteSession = (e, sessionId) => {
@@ -1472,6 +1483,44 @@ const ChatInterface = () => {
                     document.body
                 )
             }
+            {/* Clear History Confirmation Modal */}
+            <AnimatePresence>
+                {isClearModalOpen && (
+                    <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="bg-slate-900 border border-slate-700/50 rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-6 text-center">
+                                <div className="w-16 h-16 bg-yellow-500/10 text-yellow-500 rounded-full flex items-center justify-center mx-auto mb-4 ring-1 ring-yellow-500/20">
+                                    <Eraser size={32} />
+                                </div>
+                                <h3 className="text-xl font-bold text-white mb-2">Clear History?</h3>
+                                <p className="text-slate-400 text-sm mb-6">
+                                    Are you sure you want to clear all messages in this chat? This action cannot be undone.
+                                </p>
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={() => setIsClearModalOpen(false)}
+                                        className="flex-1 py-2.5 rounded-xl bg-slate-800 text-slate-300 font-medium hover:bg-slate-700 transition-all border border-slate-700"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={confirmClearSession}
+                                        className="flex-1 py-2.5 rounded-xl bg-yellow-600 text-white font-medium hover:bg-yellow-500 transition-all shadow-lg shadow-yellow-900/20"
+                                    >
+                                        Clear
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
             {/* Delete Confirmation Modal */}
             <AnimatePresence>
                 {isDeleteModalOpen && (
