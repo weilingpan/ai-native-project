@@ -122,7 +122,7 @@ const ChatInterface = () => {
             title: 'New Chat',
             description: 'New conversation started',
             model: 'gpt-5-nano',
-            type: 'chat', // 'chat' | 'image'
+            type: 'text', // 'text' | 'image'
             messages: [],
             timestamp: new Date(),
             createdAt: new Date().toISOString()
@@ -141,7 +141,7 @@ const ChatInterface = () => {
     // New State for Features
     const [isModelModalOpen, setIsModelModalOpen] = useState(false);
     const [selectedModel, setSelectedModel] = useState('gpt-5-nano');
-    const [selectedType, setSelectedType] = useState('chat'); // 'chat' | 'image'
+    const [selectedType, setSelectedType] = useState('text'); // 'text' | 'image'
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDescription, setNewSessionDescription] = useState('');
     const [hoveredSessionId, setHoveredSessionId] = useState(null);
@@ -267,7 +267,7 @@ const ChatInterface = () => {
         setModalMode('create');
         setNewSessionTitle('');
         setNewSessionDescription('');
-        setSelectedType('chat');
+        setSelectedType('text');
         setSelectedModel('gpt-5-nano');
         setIsModelModalOpen(true);
     };
@@ -278,7 +278,7 @@ const ChatInterface = () => {
         setTargetSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDescription(session.description);
-        setSelectedType(session.type || 'chat');
+        setSelectedType(session.type || 'text');
         setSelectedModel(session.model || 'gpt-5-nano');
         setIsModelModalOpen(true);
     };
@@ -1273,16 +1273,16 @@ const ChatInterface = () => {
                                         <button
                                             disabled={modalMode === 'edit'}
                                             onClick={() => {
-                                                setSelectedType('chat');
+                                                setSelectedType('text');
                                                 setSelectedModel('gpt-5-nano');
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'chat'
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'text'
                                                 ? 'bg-slate-700 text-white shadow-sm'
                                                 : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
                                                 } ${modalMode === 'edit' ? 'disabled:cursor-not-allowed disabled:opacity-50' : ''}`}
                                         >
                                             <MessageSquare size={16} />
-                                            Chat
+                                            Text
                                         </button>
                                         <button
                                             disabled={modalMode === 'edit'}
@@ -1339,7 +1339,7 @@ const ChatInterface = () => {
 
                                 <div className="space-y-4">
                                     <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Select Model</label>
-                                    {selectedType === 'chat' ? (
+                                    {selectedType === 'text' ? (
                                         <div className="grid gap-3 max-h-60 overflow-y-auto custom-scrollbar pr-1">
                                             {loadingModels ? (
                                                 <div className="text-slate-400 text-center py-4">Loading models...</div>
