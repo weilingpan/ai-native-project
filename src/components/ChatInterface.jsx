@@ -3,6 +3,36 @@ import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, 
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 
+const CodeBlock = ({ lang, code }) => {
+    const [isCopied, setIsCopied] = useState(false);
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(code);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+    };
+
+    return (
+        <div className="rounded-lg overflow-hidden border border-slate-700/50 bg-[#1e1e1e] shadow-lg my-2 group/code">
+            <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/5">
+                <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider">{lang || 'text'}</span>
+                <button
+                    onClick={handleCopy}
+                    className="flex items-center gap-1.5 text-[10px] text-slate-400 hover:text-white transition-colors"
+                >
+                    {isCopied ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                    {isCopied ? 'Copied!' : 'Copy'}
+                </button>
+            </div>
+            <div className="p-3 overflow-x-auto custom-scrollbar">
+                <pre className="font-mono text-sm text-slate-300 leading-relaxed font-normal">
+                    <code>{code}</code>
+                </pre>
+            </div>
+        </div>
+    );
+};
+
 const AudioPlayer = ({ src }) => {
     const audioRef = useRef(null);
     const [isPlaying, setIsPlaying] = useState(false);
@@ -394,6 +424,29 @@ const ChatInterface = () => {
             console.error('Download failed:', error);
             window.open(imageUrl, '_blank');
         }
+    };
+
+    const renderMessageContent = (text) => {
+        if (!text) return null;
+        const parts = text.split(/```(\w*)\n([\s\S]*?)```/g);
+
+        return (
+            <div className="space-y-2">
+                {parts.map((part, index) => {
+                    if (index % 3 === 0) {
+                        // Plain Text
+                        if (!part) return null;
+                        return <div key={index} className="whitespace-pre-wrap">{part}</div>;
+                    } else if (index % 3 === 2) {
+                        // Code Block
+                        const lang = parts[index - 1] || 'text';
+                        const code = part;
+                        return <CodeBlock key={index} lang={lang} code={code} />;
+                    }
+                    return null;
+                })}
+            </div>
+        );
     };
 
     const handleExportChat = () => {
@@ -1046,7 +1099,9 @@ const ChatInterface = () => {
                                                     }`}>
                                                     {message.sender === 'user' || (message.text && !message.imageUrl) ? (
                                                         <div className="relative">
-                                                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                                            <div className="leading-relaxed break-words">
+                                                                {renderMessageContent(message.text)}
+                                                            </div>
                                                             <button
                                                                 onClick={() => handleCopyMessage(message.text, message.id)}
                                                                 className={`absolute top-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm border border-slate-700/50 ${message.sender === 'user'
