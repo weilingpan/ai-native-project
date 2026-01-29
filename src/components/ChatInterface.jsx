@@ -1,7 +1,89 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic, AudioWaveform, ArrowDown, Play, Pause } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
+
+const AudioPlayer = ({ src }) => {
+    const audioRef = useRef(null);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [progress, setProgress] = useState(0);
+    const [duration, setDuration] = useState(0);
+
+    const togglePlay = () => {
+        if (!audioRef.current) return;
+        if (isPlaying) {
+            audioRef.current.pause();
+        } else {
+            audioRef.current.play();
+        }
+        setIsPlaying(!isPlaying);
+    };
+
+    const handleTimeUpdate = () => {
+        if (audioRef.current) {
+            const current = audioRef.current.currentTime;
+            const total = audioRef.current.duration;
+            setProgress((current / total) * 100);
+        }
+    };
+
+    const handleLoadedMetadata = () => {
+        if (audioRef.current) {
+            setDuration(audioRef.current.duration);
+        }
+    };
+
+    const formatTime = (time) => {
+        if (!time || isNaN(time)) return "0:00";
+        const min = Math.floor(time / 60);
+        const sec = Math.floor(time % 60);
+        return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    };
+
+    return (
+        <div className="flex items-center gap-3 w-full py-1">
+            <button
+                onClick={togglePlay}
+                className="w-8 h-8 flex items-center justify-center rounded-full bg-blue-600 hover:bg-blue-500 text-white transition-all shadow-md shrink-0"
+            >
+                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+            </button>
+            <div className="flex-1 flex flex-col justify-center gap-1.5 min-w-[120px]">
+                <div
+                    className="h-1.5 bg-slate-700/50 rounded-full overflow-hidden w-full cursor-pointer relative group"
+                    onClick={(e) => {
+                        if (!audioRef.current) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const x = e.clientX - rect.left;
+                        const newTime = (x / rect.width) * audioRef.current.duration;
+                        audioRef.current.currentTime = newTime;
+                    }}
+                >
+                    <div
+                        className="h-full bg-blue-500 rounded-full transition-all duration-100 ease-linear relative"
+                        style={{ width: `${progress}%` }}
+                    >
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full opacity-0 group-hover:opacity-100 shadow-sm" />
+                    </div>
+                </div>
+                <div className="flex justify-between text-[10px] text-slate-400 font-mono leading-none select-none">
+                    <span>{formatTime(audioRef.current?.currentTime)}</span>
+                    <span>{formatTime(duration)}</span>
+                </div>
+            </div>
+            <audio
+                ref={audioRef}
+                src={src}
+                onTimeUpdate={handleTimeUpdate}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={() => setIsPlaying(false)}
+                onPause={() => setIsPlaying(false)}
+                onPlay={() => setIsPlaying(true)}
+                className="hidden"
+            />
+        </div>
+    );
+};
 
 const ChatInterface = () => {
     const [sessions, setSessions] = useState([
@@ -23,6 +105,7 @@ const ChatInterface = () => {
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const messagesEndRef = useRef(null);
     const buttonRef = useRef(null);
+    const inputLabelRef = useRef(null);
     const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
 
     // New State for Features
@@ -43,6 +126,9 @@ const ChatInterface = () => {
     const [targetSessionId, setTargetSessionId] = useState(null);
     const [availableModels, setAvailableModels] = useState([]); // State for API models
     const [loadingModels, setLoadingModels] = useState(true);
+    const [availableVoices, setAvailableVoices] = useState([]);
+    const [loadingVoices, setLoadingVoices] = useState(false);
+    const [selectedVoice, setSelectedVoice] = useState('alloy');
     const [copiedMessageId, setCopiedMessageId] = useState(null);
     const [searchQuery, setSearchQuery] = useState('');
 
@@ -81,7 +167,50 @@ const ChatInterface = () => {
         fetchModels();
     }, []);
 
+    // Reset voice selection when opening create modal
+    useEffect(() => {
+        if (isModelModalOpen && modalMode === 'create') {
+            setSelectedVoice('alloy');
+        }
+    }, [isModelModalOpen, modalMode]);
+
     const activeSession = sessions.find(s => s.id === activeSessionId) || sessions[0];
+
+    // Fetch Voices when session type is audio
+    useEffect(() => {
+        if ((activeSession?.type === 'audio' || (isModelModalOpen && selectedType === 'audio')) && availableVoices.length === 0 && !loadingVoices) {
+            const fetchVoices = async () => {
+                try {
+                    setLoadingVoices(true);
+                    const response = await fetch('/llm_openai/text-to-speech/voices');
+                    if (!response.ok) throw new Error('Failed to fetch voices');
+                    const data = await response.json();
+                    setAvailableVoices(data.voices || []);
+                } catch (error) {
+                    console.error("Error fetching voices:", error);
+                    // Fallback
+                    setAvailableVoices(['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer', 'coral', 'sage']);
+                } finally {
+                    setLoadingVoices(false);
+                }
+            };
+            fetchVoices();
+        }
+    }, [activeSessionId, activeSession?.type, availableVoices.length, loadingVoices, isModelModalOpen, selectedType]);
+
+    const handleVoiceSelect = (voice) => {
+        setSessions(prev => prev.map(s => {
+            if (s.id === activeSessionId) {
+                return { ...s, voice: voice };
+            }
+            return s;
+        }));
+
+        // Slightly scroll down to hint at next step
+        setTimeout(() => {
+            inputLabelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
+    };
 
     useEffect(() => {
         const handleResize = () => {
@@ -132,7 +261,8 @@ const ChatInterface = () => {
                 model: selectedModel,
                 type: selectedType,
                 messages: [],
-                timestamp: new Date()
+                timestamp: new Date(),
+                voice: selectedType === 'audio' ? selectedVoice : undefined
             };
             setSessions(prev => [newSession, ...prev]);
             setActiveSessionId(newId);
@@ -340,7 +470,11 @@ const ChatInterface = () => {
         }));
 
         // Handle Image Generation Mode
+        // Handle Image Generation Mode
         if (activeSession.type === 'image') {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
             try {
                 const response = await fetch('/llm_openai/generate/image', {
                     method: 'POST',
@@ -351,8 +485,10 @@ const ChatInterface = () => {
                     body: JSON.stringify({
                         prompt: currentInput,
                         model: "dall-e-3"
-                    })
+                    }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     throw new Error(`Image Gen Error: ${response.status}`);
@@ -387,13 +523,14 @@ const ChatInterface = () => {
 
             } catch (error) {
                 console.error("Image Gen Failed:", error);
+                const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error generating image: ${error.message}`;
                 setSessions(prev => prev.map(s => {
                     if (s.id === activeSessionId) {
                         return {
                             ...s,
                             messages: s.messages.map(m =>
                                 m.id === botMsgId
-                                    ? { ...m, text: `Error generating image: ${error.message}`, isStreaming: false }
+                                    ? { ...m, text: errorMessage, isStreaming: false }
                                     : m
                             )
                         };
@@ -401,8 +538,72 @@ const ChatInterface = () => {
                     return s;
                 }));
             }
-            return; // Exit function, don't do chat API call
+            return;
         }
+
+        // Handle Audio Generation Mode
+        if (activeSession.type === 'audio') {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
+            try {
+                const response = await fetch('/llm_openai/text-to-speech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        text: currentInput,
+                        model: activeSession.model || "gpt-4o-mini-tts",
+                        voice: activeSession.voice || "coral",
+                        instructions: "Speak in a cheerful and positive tone.",
+                        filename: `speech-${Date.now()}.mp3`
+                    }),
+                    signal: controller.signal
+                });
+                clearTimeout(timeoutId);
+
+                if (!response.ok) throw new Error('Audio generation failed');
+
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                const duration = ((Date.now() - initialBotMessage.startTime) / 1000).toFixed(2);
+
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return {
+                            ...s,
+                            messages: s.messages.map(m =>
+                                m.id === botMsgId
+                                    ? { ...m, text: '', audioUrl: audioUrl, duration: duration, isStreaming: false, voice: activeSession.voice || "coral" }
+                                    : m
+                            )
+                        };
+                    }
+                    return s;
+                }));
+            } catch (error) {
+                console.error("Audio gen error:", error);
+                const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error: ${error.message}`;
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return {
+                            ...s,
+                            messages: s.messages.map(m =>
+                                m.id === botMsgId
+                                    ? { ...m, text: errorMessage, isStreaming: false }
+                                    : m
+                            )
+                        };
+                    }
+                    return s;
+                }));
+            }
+            return;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
         try {
             // 2. Call API (Using proxy: /api -> http://127.0.0.1:8000)
@@ -416,8 +617,10 @@ const ChatInterface = () => {
                     human_message: currentInput,
                     model: activeSession?.model || "gpt-5-nano",
                     stream: true
-                })
+                }),
+                signal: controller.signal
             });
+            clearTimeout(timeoutId);
 
             if (!response.ok) {
                 const errorText = await response.text();
@@ -504,6 +707,7 @@ const ChatInterface = () => {
 
         } catch (error) {
             console.error("Failed to fetch bot response:", error);
+            const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error: ${error.message}`;
             // Optionally update the bot message to show an error
             setSessions(prev => prev.map(s => {
                 if (s.id === activeSessionId) {
@@ -511,7 +715,7 @@ const ChatInterface = () => {
                         ...s,
                         messages: s.messages.map(m =>
                             m.id === botMsgId
-                                ? { ...m, text: `Error: ${error.message}` }
+                                ? { ...m, text: errorMessage }
                                 : m
                         )
                     };
@@ -576,6 +780,8 @@ const ChatInterface = () => {
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 {session.type === 'image' ? (
                                     <ImageIcon size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
+                                ) : session.type === 'audio' ? (
+                                    <AudioWaveform size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-purple-400' : 'text-slate-600'}`} />
                                 ) : (
                                     <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 )}
@@ -759,6 +965,23 @@ const ChatInterface = () => {
                                     ))}
                                 </div>
                             </div>
+                        ) : activeSession?.type === 'audio' ? (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                                <div className="w-20 h-20 bg-purple-500/10 rounded-full flex items-center justify-center mb-6 ring-1 ring-purple-500/30">
+                                    <AudioWaveform size={40} className="text-purple-500" />
+                                </div>
+                                <h3 className="text-xl font-medium text-slate-300 mb-2">Text to Speech</h3>
+                                <p className="text-sm text-slate-500 mb-6 max-w-md text-center">
+                                    Turn your text into lifelike speech. Type your message below to get started.
+                                </p>
+                                <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 rounded-full border border-slate-700/50 backdrop-blur-sm">
+                                    <span className="text-xs text-slate-400">Current Voice:</span>
+                                    <span className="text-xs font-medium text-purple-400 capitalize flex items-center gap-1.5">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+                                        {activeSession?.voice || 'coral'}
+                                    </span>
+                                </div>
+                            </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                                 <div className="w-20 h-20 bg-slate-800/50 rounded-full flex items-center justify-center mb-6 ring-1 ring-slate-700">
@@ -770,85 +993,128 @@ const ChatInterface = () => {
                         )
                     ) : (
                         <AnimatePresence initial={false}>
-                            {activeSession?.messages.map((message) => (
-                                <motion.div
-                                    key={message.id}
-                                    initial={{ opacity: 0, y: 10 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
-                                >
-                                    <div className="flex flex-col items-center gap-1 shrink-0 mt-1">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${message.sender === 'user'
-                                            ? 'bg-purple-500/20 text-purple-400'
-                                            : 'bg-blue-500/20 text-blue-400'
-                                            }`}>
-                                            {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
-                                        </div>
-                                        {message.sender === 'bot' && message.model && (
-                                            <span className="text-[10px] text-slate-500 font-medium tracking-tight uppercase text-center max-w-[6rem] leading-none">
-                                                {message.model}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className={`space-y-2 max-w-[80%] md:max-w-[80%] group relative`}>
-                                        <div className={`p-3 md:p-4 rounded-2xl shadow-md text-sm md:text-base ${message.sender === 'user'
-                                            ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
-                                            : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
-                                            }`}>
-                                            {message.sender === 'user' || (message.text && !message.imageUrl) ? (
-                                                <div className="relative">
-                                                    <p className="whitespace-pre-wrap break-words">{message.text}</p>
-                                                    <button
-                                                        onClick={() => handleCopyMessage(message.text, message.id)}
-                                                        className={`absolute top-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm border border-slate-700/50 ${message.sender === 'user'
-                                                            ? 'left-0 -translate-x-[calc(100%+8px)]'
-                                                            : 'right-0 translate-x-[calc(100%+8px)]'
-                                                            }`}
-                                                    >
-                                                        {copiedMessageId === message.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
-                                                    </button>
-                                                </div>
-                                            ) : message.imageUrl ? (
-                                                <div className="space-y-2">
-                                                    <div className="relative group/image inline-block rounded-lg overflow-hidden">
-                                                        <img
-                                                            src={message.imageUrl}
-                                                            alt="Generated"
-                                                            className="max-w-full md:max-w-sm border border-slate-700/50 shadow-sm"
-                                                            loading="lazy"
-                                                        />
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDownloadImage(message.imageUrl, `generated-${message.id}.png`);
-                                                            }}
-                                                            className="absolute top-2 right-2 p-2 rounded-lg bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-all z-10 opacity-100 shadow-md border border-white/10"
-                                                            title="Download Image"
-                                                        >
-                                                            <Download size={18} />
-                                                        </button>
-                                                    </div>
-                                                    <p className="text-xs text-slate-400 italic">{message.text}</p>
-                                                </div>
-                                            ) : (
-                                                <div className="flex gap-1 h-5 items-center px-1">
-                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                                    <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className={`flex items-center gap-2 text-xs text-slate-500 px-1 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                            <span>{message.timestamp}</span>
-                                            {message.duration && (
-                                                <span className="text-slate-600 bg-slate-800/50 px-1.5 rounded border border-slate-700/50">
-                                                    {message.duration}s
+                            {activeSession?.messages.map((message, index) => {
+                                const currentDate = message.createdAt ? new Date(message.createdAt) : new Date(message.timestamp);
+                                const prevMessage = activeSession.messages[index - 1];
+                                const prevDate = prevMessage ? (prevMessage.createdAt ? new Date(prevMessage.createdAt) : new Date(prevMessage.timestamp)) : null;
+                                const showDateSeparator = !prevDate || currentDate.toDateString() !== prevDate.toDateString();
+
+                                return (
+                                    <React.Fragment key={message.id}>
+                                        {showDateSeparator && (
+                                            <div className="flex justify-center my-6">
+                                                <span className="bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 text-slate-400 text-xs font-medium py-1 px-4 rounded-full shadow-sm">
+                                                    {currentDate.toLocaleDateString([], { month: 'long', day: 'numeric', year: currentDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}
                                                 </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </motion.div>
-                            ))}
+                                            </div>
+                                        )}
+                                        <motion.div
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            className={`flex gap-4 max-w-3xl ${message.sender === 'user' ? 'ml-auto flex-row-reverse' : ''}`}
+                                        >
+                                            <div className="flex flex-col items-center gap-1 shrink-0 mt-1">
+                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${message.sender === 'user'
+                                                    ? 'bg-purple-500/20 text-purple-400'
+                                                    : 'bg-blue-500/20 text-blue-400'
+                                                    }`}>
+                                                    {message.sender === 'user' ? <User size={18} /> : <Bot size={18} />}
+                                                </div>
+                                                {message.sender === 'bot' && message.model && (
+                                                    <span className="text-[10px] text-slate-500 font-medium tracking-tight uppercase text-center max-w-[6rem] leading-none">
+                                                        {message.model}
+                                                        {activeSession.type === 'audio' && (message.voice || activeSession.voice) && (
+                                                            <span className="block text-[9px] text-purple-400/80 mt-0.5 capitalize">
+                                                                {message.voice || activeSession.voice}
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className={`relative group max-w-[80%] md:max-w-[80%]`}>
+                                                <div className={`p-3 md:p-4 rounded-2xl shadow-md text-sm md:text-base w-fit ${message.sender === 'user'
+                                                    ? 'bg-gradient-to-br from-blue-600 to-purple-600 text-white rounded-tr-none'
+                                                    : 'bg-slate-800/50 text-slate-200 border border-slate-700/50 rounded-tl-none'
+                                                    }`}>
+                                                    {message.sender === 'user' || (message.text && !message.imageUrl) ? (
+                                                        <div className="relative">
+                                                            <p className="whitespace-pre-wrap break-words">{message.text}</p>
+                                                            <button
+                                                                onClick={() => handleCopyMessage(message.text, message.id)}
+                                                                className={`absolute top-0 p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-all opacity-0 group-hover:opacity-100 shadow-sm border border-slate-700/50 ${message.sender === 'user'
+                                                                    ? 'left-0 -translate-x-[calc(100%+8px)]'
+                                                                    : 'right-0 translate-x-[calc(100%+8px)]'
+                                                                    }`}
+                                                            >
+                                                                {copiedMessageId === message.id ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
+                                                            </button>
+                                                        </div>
+                                                    ) : message.imageUrl ? (
+                                                        <div className="space-y-2">
+                                                            <div className="relative group/image inline-block rounded-lg overflow-hidden">
+                                                                <img
+                                                                    src={message.imageUrl}
+                                                                    alt="Generated"
+                                                                    className="max-w-full md:max-w-sm border border-slate-700/50 shadow-sm"
+                                                                    loading="lazy"
+                                                                />
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        handleDownloadImage(message.imageUrl, `generated-${message.id}.png`);
+                                                                    }}
+                                                                    className="absolute top-2 right-2 p-2 rounded-lg bg-black/40 hover:bg-black/70 text-white backdrop-blur-md transition-all z-10 opacity-100 shadow-md border border-white/10"
+                                                                    title="Download Image"
+                                                                >
+                                                                    <Download size={18} />
+                                                                </button>
+                                                            </div>
+                                                            <p className="text-xs text-slate-400 italic">{message.text}</p>
+                                                        </div>
+                                                    ) : message.audioUrl ? (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-xl border border-slate-700/50 max-w-sm">
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="text-xs text-slate-400 mb-1">Generated Audio</div>
+                                                                    <AudioPlayer src={message.audioUrl} />
+                                                                </div>
+                                                                <a
+                                                                    href={message.audioUrl}
+                                                                    download={`speech-${message.id}.mp3`}
+                                                                    className="p-2 text-slate-400 hover:text-white hover:bg-slate-700/50 rounded-lg transition-colors"
+                                                                    title="Download MP3"
+                                                                >
+                                                                    <Download size={18} />
+                                                                </a>
+                                                            </div>
+                                                            {message.text && <p className="text-xs text-slate-400 italic">"{message.text}"</p>}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex gap-1 h-5 items-center px-1">
+                                                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                                            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <div className={`flex items-center gap-2 text-xs text-slate-500 px-1 mt-1 ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                                    <span>
+                                                        {message.createdAt
+                                                            ? new Date(message.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                                            : (message.timestamp.includes(',') ? message.timestamp.split(',')[1]?.trim() : message.timestamp.split(' ').slice(1).join(' ')) || message.timestamp
+                                                        }
+                                                    </span>
+                                                    {message.duration && (
+                                                        <span className="text-slate-600 bg-slate-800/50 px-1.5 rounded border border-slate-700/50">
+                                                            {message.duration}s
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    </React.Fragment>
+                                );
+                            })}
                         </AnimatePresence>
                     )}
                     <div ref={messagesEndRef} />
@@ -858,7 +1124,8 @@ const ChatInterface = () => {
                 <div className="p-4 md:p-6 bg-slate-900/80 backdrop-blur-md border-t border-slate-700/50">
                     <div className="max-w-4xl mx-auto relative group/input-container">
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/20 to-purple-500/20 rounded-xl blur transition-opacity opacity-0 group-hover/input-container:opacity-100 duration-500"></div>
-                        <div className="relative flex items-end gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-500/50 focus-within:border-blue-500/50 transition-all">
+                        <div className={`relative flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-xl p-2 shadow-inner focus-within:ring-2 transition-all ${activeSession?.type === 'audio' ? 'focus-within:ring-purple-500/50 focus-within:border-purple-500/50' : 'focus-within:ring-blue-500/50 focus-within:border-blue-500/50'
+                            }`}>
                             <div className="relative group">
                                 <button className="p-2 md:p-3 text-slate-400 hover:text-white hover:bg-slate-700 rounded-lg transition-colors">
                                     <Paperclip size={20} />
@@ -867,6 +1134,12 @@ const ChatInterface = () => {
                                     Feature Coming Soon
                                 </span>
                             </div>
+                            {activeSession?.type === 'audio' && activeSession?.voice && (
+                                <div className="flex items-center gap-1.5 px-2 py-1.5 bg-purple-500/10 rounded-lg border border-purple-500/20 text-[10px] text-purple-300 shrink-0 select-none">
+                                    <AudioWaveform size={12} />
+                                    <span className="capitalize font-medium">{activeSession.voice}</span>
+                                </div>
+                            )}
                             <textarea
                                 value={inputValue}
                                 onChange={(e) => setInputValue(e.target.value)}
@@ -928,9 +1201,9 @@ const ChatInterface = () => {
                                                 setSelectedType('chat');
                                                 setSelectedModel('gpt-5-nano');
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === 'chat'
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'chat'
                                                 ? 'bg-slate-700 text-white shadow-sm'
-                                                : 'text-slate-400 hover:text-slate-200'
+                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
                                                 }`}
                                         >
                                             <MessageSquare size={16} />
@@ -941,13 +1214,26 @@ const ChatInterface = () => {
                                                 setSelectedType('image');
                                                 setSelectedModel('dall-e-3'); // Default for image
                                             }}
-                                            className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${selectedType === 'image'
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'image'
                                                 ? 'bg-blue-600 text-white shadow-sm'
-                                                : 'text-slate-400 hover:text-slate-200'
+                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
                                                 }`}
                                         >
                                             <ImageIcon size={16} />
-                                            Image Generation
+                                            Image
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedType('audio');
+                                                setSelectedModel('gpt-4o-mini-tts');
+                                            }}
+                                            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium transition-all ${selectedType === 'audio'
+                                                ? 'bg-purple-600 text-white shadow-sm'
+                                                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700/30'
+                                                }`}
+                                        >
+                                            <AudioWaveform size={16} />
+                                            Voice
                                         </button>
                                     </div>
                                 </div>
@@ -1013,7 +1299,7 @@ const ChatInterface = () => {
                                                 ))
                                             )}
                                         </div>
-                                    ) : (
+                                    ) : selectedType === 'image' ? (
                                         <div className="p-4 rounded-xl border border-blue-500/50 bg-blue-600/10 flex items-center gap-4">
                                             <div className="w-5 h-5 rounded-full border-2 border-blue-500 flex items-center justify-center shrink-0">
                                                 <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
@@ -1023,7 +1309,44 @@ const ChatInterface = () => {
                                                 <div className="text-xs text-slate-500">Standard Image Generation Model</div>
                                             </div>
                                         </div>
-                                    )}
+                                    ) : selectedType === 'audio' ? (
+                                        <div className="space-y-4">
+                                            <div className="p-4 rounded-xl border border-purple-500/50 bg-purple-600/10 flex items-center gap-4">
+                                                <div className="w-5 h-5 rounded-full border-2 border-purple-500 flex items-center justify-center shrink-0">
+                                                    <div className="w-2.5 h-2.5 rounded-full bg-purple-500" />
+                                                </div>
+                                                <div>
+                                                    <div className="font-medium text-purple-400">GPT-4o Mini TTS</div>
+                                                    <div className="text-xs text-slate-500">Text-to-Speech Model</div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 max-h-48 overflow-y-auto custom-scrollbar p-1">
+                                                {availableVoices.length > 0 ? availableVoices.map((voice) => (
+                                                    <button
+                                                        key={voice}
+                                                        onClick={() => {
+                                                            if (modalMode === 'edit') {
+                                                                handleVoiceSelect(voice);
+                                                            } else {
+                                                                setSelectedVoice(voice);
+                                                            }
+                                                        }}
+                                                        className={`p-2 rounded-lg border text-xs font-medium capitalize transition-all ${(modalMode === 'create' ? selectedVoice : (activeSession?.voice || 'coral')) === voice
+                                                            ? 'bg-purple-600 border-purple-500 text-white shadow-sm'
+                                                            : 'bg-slate-800/50 border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                                                            }`}
+                                                    >
+                                                        {voice}
+                                                    </button>
+                                                )) : (
+                                                    <div className="col-span-4 text-center text-slate-500 text-xs py-2">
+                                                        No voices loaded. Start a session to fetch.
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </div>
 
