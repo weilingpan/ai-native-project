@@ -4,12 +4,13 @@ import ChatInterface from './components/ChatInterface';
 import Dashboard from './components/Dashboard';
 import ComingSoon from './components/ComingSoon';
 import Login from './components/Login';
+import CreateAccount from './components/CreateAccount';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 
 function App() {
     const location = useLocation();
-    const isLoginPage = location.pathname === '/login';
+    const isLoginPage = location.pathname === '/login' || location.pathname === '/create-account';
 
     return (
         <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-text">
@@ -25,9 +26,8 @@ function App() {
                 <div className="relative z-10 w-full h-full flex flex-col">
                     <AnimatePresence mode='wait'>
                         <Routes location={location} key={location.pathname}>
-                            <Route path="/login" element={
-                                <Login />
-                            } />
+                            <Route path="/login" element={<Login />} />
+                            <Route path="/create-account" element={<CreateAccount />} />
 
                             <Route path="/" element={
                                 <RequireAuth>

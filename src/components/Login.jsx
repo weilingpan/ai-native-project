@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Lock, ArrowRight, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -226,6 +226,12 @@ const Login = () => {
                         </AnimatePresence>
                     </div>
                 </div>
+                <p className="mt-6 text-center text-sm text-secondary">
+                    Don't have an account?{' '}
+                    <Link to="/create-account" className="text-primary hover:underline font-medium">
+                        Create one
+                    </Link>
+                </p>
             </motion.div>
         </div>
     );
