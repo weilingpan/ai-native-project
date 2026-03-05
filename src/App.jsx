@@ -10,7 +10,7 @@ import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 
 function App() {
     const location = useLocation();
-    const isLoginPage = location.pathname === '/login' || location.pathname === '/create-account';
+    const isLoginPage = location.pathname === '/login' || location.pathname === '/signup';
 
     return (
         <div className="flex h-screen w-full bg-background overflow-hidden font-sans text-text">
@@ -27,7 +27,7 @@ function App() {
                     <AnimatePresence mode='wait'>
                         <Routes location={location} key={location.pathname}>
                             <Route path="/login" element={<Login />} />
-                            <Route path="/create-account" element={<CreateAccount />} />
+                            <Route path="/signup" element={<CreateAccount />} />
 
                             <Route path="/" element={
                                 <RequireAuth>
