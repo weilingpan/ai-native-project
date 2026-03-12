@@ -1251,9 +1251,9 @@ const ChatInterface = () => {
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
                             exit={{ opacity: 0, scale: 0.95 }}
-                            className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl overflow-hidden"
+                            className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-md shadow-2xl flex flex-col max-h-[95vh]"
                         >
-                            <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                            <div className="p-6 border-b border-slate-800 flex justify-between items-center shrink-0">
                                 <h3 className="text-xl font-semibold text-white">
                                     {modalMode === 'create' ? 'New Chat' : 'Edit Chat'}
                                 </h3>
@@ -1265,7 +1265,7 @@ const ChatInterface = () => {
                                 </button>
                             </div>
 
-                            <div className="p-6 space-y-6">
+                            <div className="p-6 space-y-6 overflow-y-auto custom-scrollbar">
                                 {/* Type Selection */}
                                 <div className="space-y-4">
                                     <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Session Type</label>
@@ -1425,7 +1425,7 @@ const ChatInterface = () => {
                                 </div>
                             </div>
 
-                            <div className="p-6 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/20">
+                            <div className="p-6 border-t border-slate-800 flex justify-end gap-3 bg-slate-800/20 shrink-0">
                                 <button
                                     onClick={() => setIsModelModalOpen(false)}
                                     className="px-4 py-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg transition-colors font-medium"
