@@ -24,7 +24,7 @@ function App() {
 
                 {/* Content */}
                 <div className="relative z-10 w-full h-full flex flex-col">
-                    <AnimatePresence mode='wait'>
+                    <AnimatePresence mode='sync'>
                         <Routes location={location} key={location.pathname}>
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<CreateAccount />} />
@@ -71,11 +71,11 @@ const RequireAuth = ({ children }) => {
 // Helper wrapper for page transition animations
 const PageWrapper = ({ children }) => (
     <motion.div
-        initial={{ opacity: 0, x: 10 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -10 }}
-        transition={{ duration: 0.2 }}
-        className="w-full h-full flex flex-col"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.15 }}
+        className="w-full h-full flex flex-col absolute inset-0"
     >
         {children}
     </motion.div>

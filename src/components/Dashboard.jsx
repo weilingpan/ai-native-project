@@ -10,6 +10,9 @@ const Dashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
+        const controller = new AbortController();
+        const { signal } = controller;
+
         const fetchDashboardData = async () => {
             try {
                 const username = localStorage.getItem('username');
@@ -19,38 +22,37 @@ const Dashboard = () => {
                     return;
                 }
 
-                // Get current user details to check role
                 const userRes = await fetch(`/accounts/${username}`, {
-                    headers: { 'accept': 'application/json' }
+                    headers: { 'accept': 'application/json' },
+                    signal,
                 });
-                
+
                 if (!userRes.ok) throw new Error('Failed to fetch user profile');
                 const userData = await userRes.json();
                 setCurrentUserRole(userData.role);
 
-                // If Admin, fetch all users
                 if (userData.role === 'Admin') {
-                    // Make sure we have the token if your API needs it
                     const token = localStorage.getItem('token');
                     const headers = { 'accept': 'application/json' };
                     if (token) headers['Authorization'] = `Bearer ${token}`;
 
-                    const allUsersRes = await fetch('/accounts/', { headers });
+                    const allUsersRes = await fetch('/accounts/', { headers, signal });
                     if (!allUsersRes.ok) throw new Error('Failed to fetch users list');
-                    
+
                     const allUsersData = await allUsersRes.json();
-                    // Assume the API returns an array, or an object with an array
                     setUsers(Array.isArray(allUsersData) ? allUsersData : allUsersData.users || []);
                 }
             } catch (err) {
+                if (err.name === 'AbortError') return;
                 console.error(err);
                 setError(err.message || 'An error occurred loading the dashboard');
             } finally {
-                setIsLoading(false);
+                if (!signal.aborted) setIsLoading(false);
             }
         };
 
         fetchDashboardData();
+        return () => controller.abort();
     }, []);
 
     const filteredUsers = users.filter(u => 
@@ -123,7 +125,7 @@ const Dashboard = () => {
 
                     {/* Table Container */}
                     <div className="bg-sidebar/30 backdrop-blur-xl border border-white/10 rounded-2xl flex-1 overflow-hidden flex flex-col shadow-2xl">
-                        <div className="overflow-y-auto flex-1 p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
+                        <div className="overflow-auto flex-1 p-4 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-white/10 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-white/20">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-white/5 text-xs uppercase tracking-wider text-secondary font-semibold">
@@ -193,19 +195,14 @@ const Dashboard = () => {
                 </motion.div>
             ) : (
                 <div className="h-full flex flex-col items-center justify-center z-10">
-                    <motion.div
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.8, ease: "easeOut" }}
-                        className="text-center"
-                    >
+                    <div className="text-center">
                         <h1 className="text-6xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-purple-400 to-pink-400 pb-2">
                             Welcome!
                         </h1>
                         <p className="mt-4 text-xl text-slate-400">
                             To the Regina AI Interface
                         </p>
-                    </motion.div>
+                    </div>
                 </div>
             )}
 

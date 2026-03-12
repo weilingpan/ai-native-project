@@ -255,12 +255,19 @@ const ChatInterface = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const isFirstRender = useRef(true);
+
+    const scrollToBottom = (behavior = "smooth") => {
+        messagesEndRef.current?.scrollIntoView({ behavior });
     };
 
     useEffect(() => {
-        scrollToBottom();
+        if (isFirstRender.current) {
+            scrollToBottom("auto");
+            isFirstRender.current = false;
+        } else {
+            scrollToBottom();
+        }
     }, [activeSession?.messages, mobileView]);
 
     const handleOpenCreateModal = () => {

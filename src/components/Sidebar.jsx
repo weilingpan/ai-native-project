@@ -22,11 +22,10 @@ const Sidebar = () => {
     const navigate = useNavigate();
     const location = useLocation();
 
-    const [userRole, setUserRole] = useState('User');
+    const [userRole, setUserRole] = useState(() => localStorage.getItem('userRole') || 'User');
     const [username, setUsername] = useState('Guest');
 
     useEffect(() => {
-        // Fetch user info
         const storedUsername = localStorage.getItem('username');
         if (storedUsername) {
             setUsername(storedUsername);
@@ -35,7 +34,10 @@ const Sidebar = () => {
             })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.role) setUserRole(data.role);
+                    if (data.role) {
+                        setUserRole(data.role);
+                        localStorage.setItem('userRole', data.role);
+                    }
                 })
                 .catch(err => console.error('Failed to fetch user info:', err));
         }
@@ -84,6 +86,7 @@ const Sidebar = () => {
         if (window.confirm('Are you sure you want to log out?')) {
             localStorage.removeItem('isAuthenticated');
             localStorage.removeItem('token');
+            localStorage.removeItem('userRole');
             navigate('/login');
         }
     };
@@ -127,15 +130,22 @@ const Sidebar = () => {
                 </button>
             )}
 
+            {/* Desktop Spacer */}
+            {!isMobile && (
+                <motion.div
+                    animate={{ width: sidebarWidth }}
+                    transition={{ duration: 0.3, ease: "easeInOut" }}
+                    className="shrink-0 h-screen"
+                />
+            )}
+
             <motion.div
                 initial={{ width: sidebarWidth }}
                 animate={{ width: sidebarWidth }}
                 transition={{ duration: 0.3, ease: "easeInOut" }}
                 className={classNames(
-                    "h-screen bg-sidebar border-r border-slate-700/50 flex flex-col shrink-0 shadow-xl z-40 overflow-hidden",
+                    "h-screen bg-sidebar border-r border-slate-700/50 flex flex-col shrink-0 shadow-xl z-40 overflow-hidden fixed left-0 top-0",
                     {
-                        'fixed left-0 top-0': isMobile, // Fixed on mobile
-                        'relative': !isMobile,          // Relative (flex item) on desktop
                         'border-none': isMobile && !isOpen // Remove border when hidden on mobile
                     }
                 )}
