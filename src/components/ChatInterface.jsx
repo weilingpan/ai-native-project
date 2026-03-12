@@ -116,19 +116,8 @@ const AudioPlayer = ({ src }) => {
 };
 
 const ChatInterface = () => {
-    const [sessions, setSessions] = useState([
-        {
-            id: 1,
-            title: 'New Chat',
-            description: 'New conversation started',
-            model: 'gpt-5-nano',
-            type: 'text', // 'text' | 'image'
-            messages: [],
-            timestamp: new Date(),
-            createdAt: new Date().toISOString()
-        }
-    ]);
-    const [activeSessionId, setActiveSessionId] = useState(1);
+    const [sessions, setSessions] = useState([]);
+    const [activeSessionId, setActiveSessionId] = useState(null);
     const [inputValue, setInputValue] = useState('');
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
     const [mobileView, setMobileView] = useState('list'); // 'list' | 'chat'
@@ -196,7 +185,33 @@ const ChatInterface = () => {
             }
         };
 
+        const fetchSessions = async () => {
+            try {
+                const username = localStorage.getItem('username') || 'regina';
+                const response = await fetch(`/chat_session/?owner=${username}`);
+                if (!response.ok) throw new Error('Failed to fetch sessions');
+                const data = await response.json();
+
+                const formattedSessions = data.map(s => ({
+                    ...s,
+                    messages: s.messages || [],
+                    timestamp: s.created_at || s.timestamp || new Date(),
+                    model: s.model_name || s.model || 'gpt-5-nano',
+                    type: s.session_type || s.type || 'text'
+                }));
+
+                setSessions(formattedSessions);
+                if (formattedSessions.length > 0) {
+                    setActiveSessionId(formattedSessions[0].id);
+                }
+            } catch (error) {
+                console.error("Error fetching sessions:", error);
+                // If fetch fails, we can either leave it empty or keep a dummy
+            }
+        };
+
         fetchModels();
+        fetchSessions();
     }, []);
 
     // Reset voice selection when opening create modal
@@ -290,37 +305,93 @@ const ChatInterface = () => {
         setIsModelModalOpen(true);
     };
 
-    const handleSaveSession = () => {
+    const handleSaveSession = async () => {
         if (modalMode === 'create') {
-            const newId = Date.now();
-            const newSession = {
-                id: newId,
-                title: newSessionTitle || 'New Chat',
-                description: newSessionDescription || 'New conversation started',
-                model: selectedModel,
-                type: selectedType,
-                messages: [],
-                timestamp: new Date(),
-                voice: selectedType === 'audio' ? selectedVoice : undefined
-            };
-            setSessions(prev => [newSession, ...prev]);
-            setActiveSessionId(newId);
-            if (isMobile) {
-                setMobileView('chat');
+            try {
+                const username = localStorage.getItem('username') || 'regina';
+                const payload = {
+                    owner: username,
+                    session_type: selectedType,
+                    title: newSessionTitle || 'New Chat',
+                    description: newSessionDescription || 'New conversation started',
+                    model_name: selectedModel,
+                    metadata: selectedType === 'audio' ? { voice: selectedVoice } : {}
+                };
+
+                const response = await fetch('/chat_session/', {
+                    method: 'POST',
+                    headers: {
+                        'accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to create session');
+                }
+
+                const createdSession = await response.json();
+
+                // Ensure messages is an empty array if not returned
+                const newSession = {
+                    ...createdSession,
+                    messages: createdSession.messages || [],
+                    timestamp: createdSession.created_at || new Date(),
+                    // Map backend 'model_name' to frontend 'model' if necessary, 
+                    // though the frontend uses 'model' property in some places
+                    model: createdSession.model_name || createdSession.model || selectedModel,
+                    type: createdSession.session_type || selectedType
+                };
+
+                setSessions(prev => [newSession, ...prev]);
+                setActiveSessionId(newSession.id);
+
+                if (isMobile) {
+                    setMobileView('chat');
+                }
+            } catch (error) {
+                console.error('Error creating session:', error);
+                alert('Failed to create session. Please try again.');
             }
         } else {
             // Edit Mode
-            setSessions(prev => prev.map(s =>
-                s.id === targetSessionId
-                    ? {
-                        ...s,
-                        title: newSessionTitle || s.title,
-                        description: newSessionDescription || s.description,
-                        model: selectedModel,
-                        type: selectedType
-                    }
-                    : s
-            ));
+            try {
+                const payload = {
+                    title: newSessionTitle,
+                    description: newSessionDescription,
+                    model_name: selectedModel,
+                    session_type: selectedType,
+                    metadata: selectedType === 'audio' ? { voice: selectedVoice } : {}
+                };
+
+                const response = await fetch(`/chat_session/${targetSessionId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error('Failed to update session');
+                const updatedData = await response.json();
+
+                setSessions(prev => prev.map(s =>
+                    s.id === targetSessionId
+                        ? {
+                            ...s,
+                            ...updatedData,
+                            model: updatedData.model_name || updatedData.model || selectedModel,
+                            type: updatedData.session_type || selectedType,
+                            timestamp: updatedData.created_at || s.timestamp
+                        }
+                        : s
+                ));
+            } catch (error) {
+                console.error('Error updating session:', error);
+                alert('Failed to update session.');
+            }
         }
         setIsModelModalOpen(false);
     };
@@ -366,31 +437,34 @@ const ChatInterface = () => {
         setIsDeleteModalOpen(true);
     };
 
-    const confirmDeleteSession = () => {
+    const confirmDeleteSession = async () => {
         if (!sessionToDelete) return;
 
-        const newSessions = sessions.filter(s => s.id !== sessionToDelete);
-        if (newSessions.length === 0) {
-            // Keep at least one session
-            const newSession = {
-                id: Date.now(),
-                title: 'New Chat',
-                description: 'New conversation started',
-                model: 'gpt-5-nano',
-                messages: [],
-                timestamp: new Date(),
-                createdAt: new Date().toISOString()
-            };
-            setSessions([newSession]);
-            setActiveSessionId(newSession.id);
-        } else {
-            setSessions(newSessions);
-            if (activeSessionId === sessionToDelete) {
-                setActiveSessionId(newSessions[0].id);
+        try {
+            const response = await fetch(`/chat_session/${sessionToDelete}`, {
+                method: 'DELETE',
+                headers: { 'accept': 'application/json' }
+            });
+
+            if (!response.ok) throw new Error('Failed to delete session');
+
+            const newSessions = sessions.filter(s => s.id !== sessionToDelete);
+            if (newSessions.length === 0) {
+                setSessions([]);
+                setActiveSessionId(null);
+            } else {
+                setSessions(newSessions);
+                if (activeSessionId === sessionToDelete) {
+                    setActiveSessionId(newSessions[0].id);
+                }
             }
+        } catch (error) {
+            console.error('Error deleting session:', error);
+            alert('Failed to delete session.');
+        } finally {
+            setIsDeleteModalOpen(false);
+            setSessionToDelete(null);
         }
-        setIsDeleteModalOpen(false);
-        setSessionToDelete(null);
     };
 
     const handleStartRename = (e, session) => {
@@ -399,15 +473,32 @@ const ChatInterface = () => {
         setEditTitleValue(session.title);
     };
 
-    const handleSaveRename = (e) => {
+    const handleSaveRename = async (e) => {
         e.stopPropagation(); // prevent triggering parent click
         if (editingSessionId) {
-            setSessions(prev => prev.map(s =>
-                s.id === editingSessionId
-                    ? { ...s, title: editTitleValue || 'Untitled' }
-                    : s
-            ));
-            setEditingSessionId(null);
+            try {
+                const response = await fetch(`/chat_session/${editingSessionId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title: editTitleValue || 'Untitled' })
+                });
+
+                if (!response.ok) throw new Error('Failed to rename session');
+                const updatedData = await response.json();
+
+                setSessions(prev => prev.map(s =>
+                    s.id === editingSessionId
+                        ? { ...s, title: updatedData.title }
+                        : s
+                ));
+                setEditingSessionId(null);
+            } catch (error) {
+                console.error('Error renaming session:', error);
+                alert('Failed to rename session.');
+            }
         }
     };
 
