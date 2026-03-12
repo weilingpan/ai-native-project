@@ -49,7 +49,7 @@ export default function CreateAccount() {
                 role: formData.role
             };
 
-            const response = await fetch('http://localhost:8000/accounts/', {
+            const response = await fetch('/accounts/', {
                 method: 'POST',
                 headers: {
                     'accept': 'application/json',
@@ -221,11 +221,10 @@ export default function CreateAccount() {
                                             key={r}
                                             type="button"
                                             onClick={() => setFormData(prev => ({ ...prev, role: r }))}
-                                            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border transition-all relative overflow-hidden group/role ${
-                                                formData.role === r
+                                            className={`flex-1 flex items-center justify-center gap-2 p-3 rounded-xl border transition-all relative overflow-hidden group/role ${formData.role === r
                                                     ? 'bg-primary/10 border-primary/50 text-text ring-1 ring-primary/20'
                                                     : 'bg-background/40 border-white/5 text-secondary hover:border-white/10'
-                                            }`}
+                                                }`}
                                         >
                                             <Shield className={`h-4 w-4 transition-colors ${formData.role === r ? 'text-primary' : 'text-slate-500'}`} />
                                             <span className="text-sm font-medium">{r}</span>
