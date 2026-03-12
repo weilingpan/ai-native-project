@@ -49,7 +49,7 @@ export default function CreateAccount() {
                 role: formData.role
             };
 
-            const response = await fetch('/accounts/', {
+            const response = await fetch('http://localhost:8000/accounts/', {
                 method: 'POST',
                 headers: {
                     'accept': 'application/json',
