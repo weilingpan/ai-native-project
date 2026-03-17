@@ -25,7 +25,7 @@ function App() {
                 {/* Content */}
                 <div className="relative z-10 w-full h-full flex flex-col">
                     <AnimatePresence mode='sync'>
-                        <Routes location={location} key={location.pathname}>
+                        <Routes location={location} key={location.pathname.split('/')[1] || '/'}>
                             <Route path="/login" element={<Login />} />
                             <Route path="/signup" element={<CreateAccount />} />
 
@@ -37,6 +37,13 @@ function App() {
                                 </RequireAuth>
                             } />
                             <Route path="/chat" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <ChatInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
+                            <Route path="/chat/:session_id" element={
                                 <RequireAuth>
                                     <PageWrapper>
                                         <ChatInterface />

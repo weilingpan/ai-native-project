@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic, AudioWaveform, ArrowDown, Play, Pause, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -116,6 +117,8 @@ const AudioPlayer = ({ src }) => {
 };
 
 const ChatInterface = () => {
+    const navigate = useNavigate();
+    const { session_id: urlSessionId } = useParams();
     const [sessions, setSessions] = useState([]);
     const [activeSessionId, setActiveSessionId] = useState(null);
     const [inputValue, setInputValue] = useState('');
@@ -200,9 +203,17 @@ const ChatInterface = () => {
                     type: s.session_type || s.type || 'text'
                 }));
 
-                setSessions(formattedSessions);
-                if (formattedSessions.length > 0) {
-                    setActiveSessionId(formattedSessions[0].id);
+                const sortedSessions = formattedSessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                setSessions(sortedSessions);
+                if (sortedSessions.length > 0) {
+                    const initial = urlSessionId && sortedSessions.find(s => s.id === urlSessionId)
+                        ? urlSessionId
+                        : sortedSessions[0].id;
+                    setActiveSessionId(initial);
+                    if (urlSessionId !== initial) {
+                        navigate(`/chat/${initial}`, { replace: true });
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching sessions:", error);
@@ -269,6 +280,44 @@ const ChatInterface = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Load history when active session changes
+    useEffect(() => {
+        if (!activeSessionId) return;
+        const fetchHistory = async () => {
+            try {
+                const response = await fetch(`/chat_session/${activeSessionId}/history`);
+                if (!response.ok) return;
+                const data = await response.json();
+                const items = Array.isArray(data) ? data : (data.history || []);
+
+                // Sort by message_order to ensure correct sequence
+                const sortedItems = [...items].sort((a, b) => (a.message_order || 0) - (b.message_order || 0));
+
+                const historyMessages = sortedItems.map((item) => {
+                    const isUser = item.role === 'user';
+                    const timestamp = item.created_at ? new Date(item.created_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleString();
+
+                    return {
+                        id: item.id || `h-${item.message_order}-${Date.now()}`,
+                        text: item.content || '',
+                        sender: isUser ? 'user' : 'bot',
+                        timestamp: timestamp,
+                        createdAt: item.created_at || new Date().toISOString(),
+                        imageUrl: (item.content_type === 'image' || item.media_url?.match(/\.(jpeg|jpg|gif|png)$/i)) ? (item.media_url || item.content) : null,
+                        audioUrl: (item.content_type === 'audio' || item.media_url?.match(/\.(mp3|wav|ogg)$/i)) ? item.media_url : null,
+                        model: item.metadata?.model || null
+                    };
+                });
+                setSessions(prev => prev.map(s =>
+                    s.id === activeSessionId ? { ...s, messages: historyMessages } : s
+                ));
+            } catch (error) {
+                console.error('Error loading session history:', error);
+            }
+        };
+        fetchHistory();
+    }, [activeSessionId]);
 
     const isFirstRender = useRef(true);
 
@@ -346,6 +395,7 @@ const ChatInterface = () => {
 
                 setSessions(prev => [newSession, ...prev]);
                 setActiveSessionId(newSession.id);
+                navigate(`/chat/${newSession.id}`);
 
                 if (isMobile) {
                     setMobileView('chat');
@@ -407,6 +457,7 @@ const ChatInterface = () => {
 
     const handleSessionSelect = (sessionId) => {
         setActiveSessionId(sessionId);
+        navigate(`/chat/${sessionId}`);
         if (isMobile) {
             setMobileView('chat');
         }
@@ -418,8 +469,16 @@ const ChatInterface = () => {
         setIsClearModalOpen(true);
     };
 
-    const confirmClearSession = () => {
+    const confirmClearSession = async () => {
         if (sessionToClear) {
+            try {
+                await fetch(`/chat_session/${sessionToClear}/history`, {
+                    method: 'DELETE',
+                    headers: { 'accept': 'application/json' }
+                });
+            } catch (error) {
+                console.error('Error clearing history:', error);
+            }
             setSessions(prev => prev.map(s => {
                 if (s.id === sessionToClear) {
                     return { ...s, messages: [] };
@@ -476,14 +535,22 @@ const ChatInterface = () => {
     const handleSaveRename = async (e) => {
         e.stopPropagation(); // prevent triggering parent click
         if (editingSessionId) {
+            const session = sessions.find(s => s.id === editingSessionId);
             try {
+                const payload = {
+                    title: editTitleValue || 'Untitled',
+                    description: session.description || '',
+                    model_name: session.model_name || session.model || 'gpt-5-nano',
+                    session_type: session.session_type || session.type || 'text',
+                    metadata: session.metadata || (session.type === 'audio' ? { voice: session.voice } : {})
+                };
                 const response = await fetch(`/chat_session/${editingSessionId}`, {
-                    method: 'PATCH',
+                    method: 'PUT',
                     headers: {
                         'accept': 'application/json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ title: editTitleValue || 'Untitled' })
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) throw new Error('Failed to rename session');
@@ -616,20 +683,47 @@ const ChatInterface = () => {
             isStreaming: true // Optional flag for UI loading state if desired
         };
 
+        const isFirstMessage = activeSession.messages.length === 0;
+        const generatedTitle = isFirstMessage
+            ? (currentInput.length > 20 ? currentInput.substring(0, 20) + '...' : currentInput)
+            : activeSession.title;
+
         // 1. Add User Message and Initial Bot Message to State
         setSessions(prevSessions => prevSessions.map(session => {
             if (session.id === activeSessionId) {
-                const newTitle = session.messages.length === 0
-                    ? (currentInput.length > 20 ? currentInput.substring(0, 20) + '...' : currentInput)
-                    : session.title;
                 return {
                     ...session,
                     messages: [...session.messages, userMessage, initialBotMessage],
-                    title: newTitle
+                    title: generatedTitle
                 };
             }
             return session;
         }));
+
+        // Helper to sync title to backend if it's the first message
+        const syncTitleIfNeeded = async () => {
+            if (isFirstMessage) {
+                try {
+                    const payload = {
+                        title: generatedTitle,
+                        description: activeSession.description || 'New conversation started',
+                        model_name: activeSession.model_name || activeSession.model || "gpt-5-nano",
+                        session_type: activeSession.session_type || activeSession.type || "text",
+                        metadata: activeSession.metadata || (activeSession.type === 'audio' ? { voice: activeSession.voice } : {})
+                    };
+                    await fetch(`/chat_session/${activeSessionId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (e) {
+                    console.error('Failed to update session title:', e);
+                }
+            }
+        };
 
         // Handle Image Generation Mode
         // Handle Image Generation Mode
@@ -682,6 +776,17 @@ const ChatInterface = () => {
                     }
                     return s;
                 }));
+
+                try {
+                    await syncTitleIfNeeded();
+                    await fetch(`/chat_session/${activeSessionId}/history`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_content: currentInput, ai_content: imageUrl })
+                    });
+                } catch (e) {
+                    console.error('Failed to save image history:', e);
+                }
 
             } catch (error) {
                 console.error("Image Gen Failed:", error);
@@ -744,6 +849,7 @@ const ChatInterface = () => {
                     }
                     return s;
                 }));
+                await syncTitleIfNeeded();
             } catch (error) {
                 console.error("Audio gen error:", error);
                 const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error: ${error.message}`;
@@ -812,6 +918,16 @@ const ChatInterface = () => {
                         }
                         return s;
                     }));
+                    try {
+                        await syncTitleIfNeeded();
+                        await fetch(`/chat_session/${activeSessionId}/history`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_content: currentInput, ai_content: botText })
+                        });
+                    } catch (e) {
+                        console.error('Failed to save history:', e);
+                    }
                     break;
                 }
 
