@@ -203,13 +203,17 @@ const ChatInterface = () => {
                     type: s.session_type || s.type || 'text'
                 }));
 
-                setSessions(formattedSessions);
-                if (formattedSessions.length > 0) {
-                    const initial = urlSessionId && formattedSessions.find(s => s.id === urlSessionId)
+                const sortedSessions = formattedSessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                setSessions(sortedSessions);
+                if (sortedSessions.length > 0) {
+                    const initial = urlSessionId && sortedSessions.find(s => s.id === urlSessionId)
                         ? urlSessionId
-                        : formattedSessions[0].id;
+                        : sortedSessions[0].id;
                     setActiveSessionId(initial);
-                    navigate(`/chat/${initial}`, { replace: true });
+                    if (urlSessionId !== initial) {
+                        navigate(`/chat/${initial}`, { replace: true });
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching sessions:", error);
@@ -286,23 +290,24 @@ const ChatInterface = () => {
                 if (!response.ok) return;
                 const data = await response.json();
                 const items = Array.isArray(data) ? data : (data.history || []);
-                const historyMessages = items.flatMap((item, idx) => {
-                    const msgs = [];
-                    if (item.user_content) msgs.push({
-                        id: `h-u-${idx}`,
-                        text: item.user_content,
-                        sender: 'user',
-                        timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                        createdAt: new Date().toISOString()
-                    });
-                    if (item.ai_content) msgs.push({
-                        id: `h-b-${idx}`,
-                        text: item.ai_content,
-                        sender: 'bot',
-                        timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
-                        createdAt: new Date().toISOString()
-                    });
-                    return msgs;
+
+                // Sort by message_order to ensure correct sequence
+                const sortedItems = [...items].sort((a, b) => (a.message_order || 0) - (b.message_order || 0));
+
+                const historyMessages = sortedItems.map((item) => {
+                    const isUser = item.role === 'user';
+                    const timestamp = item.created_at ? new Date(item.created_at).toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleString();
+
+                    return {
+                        id: item.id || `h-${item.message_order}-${Date.now()}`,
+                        text: item.content || '',
+                        sender: isUser ? 'user' : 'bot',
+                        timestamp: timestamp,
+                        createdAt: item.created_at || new Date().toISOString(),
+                        imageUrl: (item.content_type === 'image' || item.media_url?.match(/\.(jpeg|jpg|gif|png)$/i)) ? (item.media_url || item.content) : null,
+                        audioUrl: (item.content_type === 'audio' || item.media_url?.match(/\.(mp3|wav|ogg)$/i)) ? item.media_url : null,
+                        model: item.metadata?.model || null
+                    };
                 });
                 setSessions(prev => prev.map(s =>
                     s.id === activeSessionId ? { ...s, messages: historyMessages } : s
@@ -530,14 +535,22 @@ const ChatInterface = () => {
     const handleSaveRename = async (e) => {
         e.stopPropagation(); // prevent triggering parent click
         if (editingSessionId) {
+            const session = sessions.find(s => s.id === editingSessionId);
             try {
+                const payload = {
+                    title: editTitleValue || 'Untitled',
+                    description: session.description || '',
+                    model_name: session.model_name || session.model || 'gpt-5-nano',
+                    session_type: session.session_type || session.type || 'text',
+                    metadata: session.metadata || (session.type === 'audio' ? { voice: session.voice } : {})
+                };
                 const response = await fetch(`/chat_session/${editingSessionId}`, {
-                    method: 'PATCH',
+                    method: 'PUT',
                     headers: {
                         'accept': 'application/json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({ title: editTitleValue || 'Untitled' })
+                    body: JSON.stringify(payload)
                 });
 
                 if (!response.ok) throw new Error('Failed to rename session');
@@ -670,20 +683,47 @@ const ChatInterface = () => {
             isStreaming: true // Optional flag for UI loading state if desired
         };
 
+        const isFirstMessage = activeSession.messages.length === 0;
+        const generatedTitle = isFirstMessage
+            ? (currentInput.length > 20 ? currentInput.substring(0, 20) + '...' : currentInput)
+            : activeSession.title;
+
         // 1. Add User Message and Initial Bot Message to State
         setSessions(prevSessions => prevSessions.map(session => {
             if (session.id === activeSessionId) {
-                const newTitle = session.messages.length === 0
-                    ? (currentInput.length > 20 ? currentInput.substring(0, 20) + '...' : currentInput)
-                    : session.title;
                 return {
                     ...session,
                     messages: [...session.messages, userMessage, initialBotMessage],
-                    title: newTitle
+                    title: generatedTitle
                 };
             }
             return session;
         }));
+
+        // Helper to sync title to backend if it's the first message
+        const syncTitleIfNeeded = async () => {
+            if (isFirstMessage) {
+                try {
+                    const payload = {
+                        title: generatedTitle,
+                        description: activeSession.description || 'New conversation started',
+                        model_name: activeSession.model_name || activeSession.model || "gpt-5-nano",
+                        session_type: activeSession.session_type || activeSession.type || "text",
+                        metadata: activeSession.metadata || (activeSession.type === 'audio' ? { voice: activeSession.voice } : {})
+                    };
+                    await fetch(`/chat_session/${activeSessionId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'accept': 'application/json',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+                } catch (e) {
+                    console.error('Failed to update session title:', e);
+                }
+            }
+        };
 
         // Handle Image Generation Mode
         // Handle Image Generation Mode
@@ -738,6 +778,7 @@ const ChatInterface = () => {
                 }));
 
                 try {
+                    await syncTitleIfNeeded();
                     await fetch(`/chat_session/${activeSessionId}/history`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -808,6 +849,7 @@ const ChatInterface = () => {
                     }
                     return s;
                 }));
+                await syncTitleIfNeeded();
             } catch (error) {
                 console.error("Audio gen error:", error);
                 const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error: ${error.message}`;
@@ -877,6 +919,7 @@ const ChatInterface = () => {
                         return s;
                     }));
                     try {
+                        await syncTitleIfNeeded();
                         await fetch(`/chat_session/${activeSessionId}/history`, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
