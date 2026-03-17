@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Send, Paperclip, MoreVertical, Bot, User, Plus, MessageSquare, Trash2, Eraser, ChevronLeft, Menu, X, Calendar, Tag, Info, Cpu, Pencil, Settings, Copy, Check, Image as ImageIcon, Download, Search, FileText, Mic, AudioWaveform, ArrowDown, Play, Pause, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
@@ -116,6 +117,8 @@ const AudioPlayer = ({ src }) => {
 };
 
 const ChatInterface = () => {
+    const navigate = useNavigate();
+    const { session_id: urlSessionId } = useParams();
     const [sessions, setSessions] = useState([]);
     const [activeSessionId, setActiveSessionId] = useState(null);
     const [inputValue, setInputValue] = useState('');
@@ -202,7 +205,11 @@ const ChatInterface = () => {
 
                 setSessions(formattedSessions);
                 if (formattedSessions.length > 0) {
-                    setActiveSessionId(formattedSessions[0].id);
+                    const initial = urlSessionId && formattedSessions.find(s => s.id === urlSessionId)
+                        ? urlSessionId
+                        : formattedSessions[0].id;
+                    setActiveSessionId(initial);
+                    navigate(`/chat/${initial}`, { replace: true });
                 }
             } catch (error) {
                 console.error("Error fetching sessions:", error);
@@ -269,6 +276,43 @@ const ChatInterface = () => {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Load history when active session changes
+    useEffect(() => {
+        if (!activeSessionId) return;
+        const fetchHistory = async () => {
+            try {
+                const response = await fetch(`/chat_session/${activeSessionId}/history`);
+                if (!response.ok) return;
+                const data = await response.json();
+                const items = Array.isArray(data) ? data : (data.history || []);
+                const historyMessages = items.flatMap((item, idx) => {
+                    const msgs = [];
+                    if (item.user_content) msgs.push({
+                        id: `h-u-${idx}`,
+                        text: item.user_content,
+                        sender: 'user',
+                        timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        createdAt: new Date().toISOString()
+                    });
+                    if (item.ai_content) msgs.push({
+                        id: `h-b-${idx}`,
+                        text: item.ai_content,
+                        sender: 'bot',
+                        timestamp: new Date().toLocaleString([], { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                        createdAt: new Date().toISOString()
+                    });
+                    return msgs;
+                });
+                setSessions(prev => prev.map(s =>
+                    s.id === activeSessionId ? { ...s, messages: historyMessages } : s
+                ));
+            } catch (error) {
+                console.error('Error loading session history:', error);
+            }
+        };
+        fetchHistory();
+    }, [activeSessionId]);
 
     const isFirstRender = useRef(true);
 
@@ -346,6 +390,7 @@ const ChatInterface = () => {
 
                 setSessions(prev => [newSession, ...prev]);
                 setActiveSessionId(newSession.id);
+                navigate(`/chat/${newSession.id}`);
 
                 if (isMobile) {
                     setMobileView('chat');
@@ -407,6 +452,7 @@ const ChatInterface = () => {
 
     const handleSessionSelect = (sessionId) => {
         setActiveSessionId(sessionId);
+        navigate(`/chat/${sessionId}`);
         if (isMobile) {
             setMobileView('chat');
         }
@@ -418,8 +464,16 @@ const ChatInterface = () => {
         setIsClearModalOpen(true);
     };
 
-    const confirmClearSession = () => {
+    const confirmClearSession = async () => {
         if (sessionToClear) {
+            try {
+                await fetch(`/chat_session/${sessionToClear}/history`, {
+                    method: 'DELETE',
+                    headers: { 'accept': 'application/json' }
+                });
+            } catch (error) {
+                console.error('Error clearing history:', error);
+            }
             setSessions(prev => prev.map(s => {
                 if (s.id === sessionToClear) {
                     return { ...s, messages: [] };
@@ -683,6 +737,16 @@ const ChatInterface = () => {
                     return s;
                 }));
 
+                try {
+                    await fetch(`/chat_session/${activeSessionId}/history`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ user_content: currentInput, ai_content: imageUrl })
+                    });
+                } catch (e) {
+                    console.error('Failed to save image history:', e);
+                }
+
             } catch (error) {
                 console.error("Image Gen Failed:", error);
                 const errorMessage = error.name === 'AbortError' ? 'Error: Request timed out (504)' : `Error generating image: ${error.message}`;
@@ -812,6 +876,15 @@ const ChatInterface = () => {
                         }
                         return s;
                     }));
+                    try {
+                        await fetch(`/chat_session/${activeSessionId}/history`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ user_content: currentInput, ai_content: botText })
+                        });
+                    } catch (e) {
+                        console.error('Failed to save history:', e);
+                    }
                     break;
                 }
 
