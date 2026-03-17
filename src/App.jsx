@@ -43,6 +43,13 @@ function App() {
                                     </PageWrapper>
                                 </RequireAuth>
                             } />
+                            <Route path="/chat/:session_id" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <ChatInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
 
                             <Route path="*" element={
                                 <RequireAuth>
