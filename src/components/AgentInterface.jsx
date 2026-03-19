@@ -265,7 +265,7 @@ const AgentInterface = () => {
                 const response = await fetch(`/chat_session/${activeSessionId}/history`);
                 if (!response.ok) throw new Error('Failed to fetch history');
                 const data = await response.json();
-                
+
                 setSessions(prev => prev.map(s => {
                     if (s.id === activeSessionId) {
                         return { ...s, messages: data.messages || [] };
@@ -339,7 +339,7 @@ const AgentInterface = () => {
                 });
 
                 if (!response.ok) throw new Error('Failed to update session');
-                
+
                 setSessions(prev => prev.map(s => {
                     if (s.id === editingSessionId) {
                         return {
@@ -375,7 +375,7 @@ const AgentInterface = () => {
                 setActiveSessionId(next);
                 if (next) navigate(`/agent/${next}`); else navigate('/agent');
             }
-        } catch(e) { console.error('Error deleting:', e); }
+        } catch (e) { console.error('Error deleting:', e); }
 
         setIsDeleteModalOpen(false);
         setSessionToDelete(null);
@@ -388,7 +388,7 @@ const AgentInterface = () => {
             if (!response.ok) throw new Error('Failed to clear history');
 
             setSessions(prev => prev.map(s => s.id === sessionToClear ? { ...s, messages: [] } : s));
-        } catch(e) { console.error('Error clearing:', e); }
+        } catch (e) { console.error('Error clearing:', e); }
 
         setIsClearModalOpen(false);
         setSessionToClear(null);
@@ -441,8 +441,7 @@ const AgentInterface = () => {
                 body: JSON.stringify({
                     chat_session_id: activeSessionId,
                     human_message: text,
-                    stream: true,
-                    tools: activeSession.tools || [],
+                    stream: true
                 }),
                 signal: controller.signal,
             });
@@ -673,13 +672,32 @@ const AgentInterface = () => {
                         <div className="w-9 h-9 rounded-full bg-violet-500/20 flex items-center justify-center">
                             <Zap size={20} className="text-violet-400" />
                         </div>
-                        <div>
+                        <div className="group relative cursor-default flex flex-col justify-center">
                             <h2 className="text-base font-semibold text-white leading-tight">
                                 {activeSession?.title || 'Agent'}
                             </h2>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[11px] text-slate-400">{systemTools.length + ownerTools.length} tools available</span>
+                                <span className="text-[11px] text-slate-400">{activeSession?.tools?.length || 0} tools available</span>
+                            </div>
+
+                            {/* Hover Tools Popover */}
+                            <div className="absolute top-10 left-0 mt-1 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-[120]">
+                                <div className="bg-slate-800 border border-slate-700/50 rounded-xl shadow-xl p-3 w-max min-w-[140px]">
+                                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Selected Tools</p>
+                                    {activeSession?.tools?.length > 0 ? (
+                                        <ul className="space-y-1.5">
+                                            {activeSession.tools.map(t => (
+                                                <li key={t} className="flex items-center gap-2 text-xs text-emerald-400 font-mono">
+                                                    <div className="w-1 h-1 rounded-full bg-emerald-500" />
+                                                    {t}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    ) : (
+                                        <p className="text-[11px] text-slate-500">No tools configured</p>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -904,7 +922,7 @@ const AgentInterface = () => {
                         <div className="h-16 border-b border-slate-700/50 flex items-center justify-between px-4">
                             <div className="flex items-center gap-2">
                                 <Wrench size={15} className="text-emerald-400" />
-                                <span className="text-sm font-semibold text-slate-200">Available Tools</span>
+                                <span className="text-sm font-semibold text-slate-200">Tool store</span>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
                                     {systemTools.length + ownerTools.length}
                                 </span>
@@ -1040,7 +1058,7 @@ const AgentInterface = () => {
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Available Tools</label>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool store</label>
                                         <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-40 custom-scrollbar p-1">
                                             {[...systemTools, ...ownerTools].length === 0 ? (
                                                 <div className="p-3 text-center text-[11px] text-slate-500">No tools found.</div>
