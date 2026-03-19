@@ -191,7 +191,7 @@ const ChatInterface = () => {
         const fetchSessions = async () => {
             try {
                 const username = localStorage.getItem('username') || 'regina';
-                const response = await fetch(`/chat_session/?owner=${username}`);
+                const response = await fetch(`/chat_session/?owner=${username}&mode=chat`);
                 if (!response.ok) throw new Error('Failed to fetch sessions');
                 const data = await response.json();
 
@@ -360,6 +360,7 @@ const ChatInterface = () => {
                 const username = localStorage.getItem('username') || 'regina';
                 const payload = {
                     owner: username,
+                    mode: 'chat',
                     session_type: selectedType,
                     title: newSessionTitle || 'New Chat',
                     description: newSessionDescription || 'New conversation started',
