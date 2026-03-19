@@ -154,8 +154,11 @@ const AgentInterface = () => {
 
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [modalMode, setModalMode] = useState('create');
+    const [editingSessionId, setEditingSessionId] = useState(null);
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
+    const [newSessionTools, setNewSessionTools] = useState([]);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -222,19 +225,32 @@ const AgentInterface = () => {
         }
     };
 
-    // ── Fetch Sessions (local storage only for now) ───────────────────────────
-    const fetchSessions = () => {
+    // ── Fetch Sessions from Backend ──────────────────────────────────────────
+    const fetchSessions = async () => {
         try {
-            const stored = localStorage.getItem('agentSessions');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                setSessions(parsed);
-                const initial = urlSessionId && parsed.find(s => s.id === urlSessionId)
+            const username = localStorage.getItem('username') || 'regina';
+            const response = await fetch(`/chat_session/?owner=${username}`);
+            if (!response.ok) throw new Error('Failed to fetch sessions');
+
+            const data = await response.json();
+            const agentSessions = data
+                .filter(s => s.mode === 'agent')
+                .map(s => ({
+                    ...s,
+                    messages: s.messages || [],
+                    timestamp: s.created_at || new Date().toISOString(),
+                    tools: s.metadata?.tools || []
+                }))
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+            setSessions(agentSessions);
+            if (agentSessions.length > 0) {
+                const initial = urlSessionId && agentSessions.find(s => s.id === urlSessionId)
                     ? urlSessionId
-                    : (parsed[0]?.id || null);
+                    : agentSessions[0].id;
                 setActiveSessionId(initial);
                 if (initial && urlSessionId !== initial) {
-                    navigate(`/agents/${initial}`, { replace: true });
+                    navigate(`/agent/${initial}`, { replace: true });
                 }
             }
         } catch (e) {
@@ -242,59 +258,145 @@ const AgentInterface = () => {
         }
     };
 
-    const persistSessions = (updated) => {
-        localStorage.setItem('agentSessions', JSON.stringify(updated));
-    };
+    useEffect(() => {
+        if (!activeSessionId) return;
+        const loadHistory = async () => {
+            try {
+                const response = await fetch(`/chat_session/${activeSessionId}/history`);
+                if (!response.ok) throw new Error('Failed to fetch history');
+                const data = await response.json();
+                
+                setSessions(prev => prev.map(s => {
+                    if (s.id === activeSessionId) {
+                        return { ...s, messages: data.messages || [] };
+                    }
+                    return s;
+                }));
+            } catch (error) {
+                console.error("Error fetching run history:", error);
+            }
+        };
+        loadHistory();
+    }, [activeSessionId]);
 
     // ── Session CRUD ──────────────────────────────────────────────────────────
-    const handleCreateSession = () => {
-        const id = `agent-${Date.now()}`;
-        const newSession = {
-            id,
-            title: newSessionTitle.trim() || 'New Agent Session',
-            description: newSessionDesc.trim() || '',
-            messages: [],
-            createdAt: new Date().toISOString(),
-        };
-        const updated = [newSession, ...sessions];
-        setSessions(updated);
-        persistSessions(updated);
-        setActiveSessionId(id);
-        navigate(`/agents/${id}`);
-        setIsCreateModalOpen(false);
+    const handleOpenCreateModal = () => {
+        setModalMode('create');
+        setEditingSessionId(null);
         setNewSessionTitle('');
         setNewSessionDesc('');
-        if (isMobile) setMobileView('chat');
+        setNewSessionTools([...systemTools, ...ownerTools].map(t => t.name));
+        setIsCreateModalOpen(true);
     };
 
-    const handleDeleteSession = () => {
-        if (!sessionToDelete) return;
-        const updated = sessions.filter(s => s.id !== sessionToDelete);
-        setSessions(updated);
-        persistSessions(updated);
-        if (activeSessionId === sessionToDelete) {
-            const next = updated[0]?.id || null;
-            setActiveSessionId(next);
-            if (next) navigate(`/agents/${next}`); else navigate('/agents');
+    const handleOpenEditModal = (session) => {
+        setModalMode('edit');
+        setEditingSessionId(session.id);
+        setNewSessionTitle(session.title);
+        setNewSessionDesc(session.description || '');
+        setNewSessionTools(session.tools || []);
+        setIsCreateModalOpen(true);
+    };
+
+    const handleSaveSession = async () => {
+        const username = localStorage.getItem('username') || 'regina';
+        const payload = {
+            owner: username,
+            mode: 'agent',
+            session_type: 'text',
+            title: newSessionTitle.trim() || 'New Agent Session',
+            description: newSessionDesc.trim() || '',
+            metadata: { tools: newSessionTools }
+        };
+
+        try {
+            if (modalMode === 'create') {
+                const response = await fetch('/chat_session/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error('Failed to create session');
+                const createdSession = await response.json();
+
+                const newSession = {
+                    ...createdSession,
+                    messages: createdSession.messages || [],
+                    timestamp: createdSession.created_at || new Date().toISOString(),
+                    tools: newSessionTools,
+                };
+
+                setSessions(prev => [newSession, ...prev]);
+                setActiveSessionId(newSession.id);
+                navigate(`/agent/${newSession.id}`);
+                if (isMobile) setMobileView('chat');
+            } else {
+                const response = await fetch(`/chat_session/${editingSessionId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) throw new Error('Failed to update session');
+                
+                setSessions(prev => prev.map(s => {
+                    if (s.id === editingSessionId) {
+                        return {
+                            ...s,
+                            title: payload.title,
+                            description: payload.description,
+                            tools: newSessionTools
+                        };
+                    }
+                    return s;
+                }));
+            }
+            setIsCreateModalOpen(false);
+            setNewSessionTitle('');
+            setNewSessionDesc('');
+            setEditingSessionId(null);
+            setModalMode('create');
+        } catch (error) {
+            console.error('Error saving session:', error);
         }
+    };
+
+    const handleDeleteSession = async () => {
+        if (!sessionToDelete) return;
+        try {
+            const response = await fetch(`/chat_session/${sessionToDelete}`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Failed to delete session');
+
+            const updated = sessions.filter(s => s.id !== sessionToDelete);
+            setSessions(updated);
+            if (activeSessionId === sessionToDelete) {
+                const next = updated[0]?.id || null;
+                setActiveSessionId(next);
+                if (next) navigate(`/agent/${next}`); else navigate('/agent');
+            }
+        } catch(e) { console.error('Error deleting:', e); }
+
         setIsDeleteModalOpen(false);
         setSessionToDelete(null);
     };
 
-    const handleClearSession = () => {
+    const handleClearSession = async () => {
         if (!sessionToClear) return;
-        const updated = sessions.map(s =>
-            s.id === sessionToClear ? { ...s, messages: [] } : s
-        );
-        setSessions(updated);
-        persistSessions(updated);
+        try {
+            const response = await fetch(`/chat_session/${sessionToClear}/history`, { method: 'DELETE' });
+            if (!response.ok) throw new Error('Failed to clear history');
+
+            setSessions(prev => prev.map(s => s.id === sessionToClear ? { ...s, messages: [] } : s));
+        } catch(e) { console.error('Error clearing:', e); }
+
         setIsClearModalOpen(false);
         setSessionToClear(null);
     };
 
     const handleSelectSession = (id) => {
         setActiveSessionId(id);
-        navigate(`/agents/${id}`);
+        navigate(`/agent/${id}`);
         if (isMobile) setMobileView('chat');
     };
 
@@ -337,8 +439,10 @@ const AgentInterface = () => {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'accept': 'application/json' },
                 body: JSON.stringify({
+                    chat_session_id: activeSessionId,
                     human_message: text,
                     stream: true,
+                    tools: activeSession.tools || [],
                 }),
                 signal: controller.signal,
             });
@@ -390,8 +494,8 @@ const AgentInterface = () => {
                                     }
                                 }
                             }
-                            
-                            const content = json.data ?? json.content ?? json.text 
+
+                            const content = json.data ?? json.content ?? json.text
                                 ?? json.choices?.[0]?.delta?.content ?? '';
                             if (content) botText += content;
                         }
@@ -425,7 +529,6 @@ const AgentInterface = () => {
                         }
                         : s
                 );
-                persistSessions(updated);
                 return updated;
             });
 
@@ -441,7 +544,6 @@ const AgentInterface = () => {
                             }
                             : s
                     );
-                    persistSessions(updated);
                     return updated;
                 });
             } else {
@@ -455,7 +557,6 @@ const AgentInterface = () => {
                             }
                             : s
                     );
-                    persistSessions(updated);
                     return updated;
                 });
             }
@@ -497,7 +598,7 @@ const AgentInterface = () => {
                 <div className="p-4 space-y-3">
                     <button
                         id="agent-new-session-btn"
-                        onClick={() => setIsCreateModalOpen(true)}
+                        onClick={handleOpenCreateModal}
                         className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-violet-900/30 group"
                     >
                         <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
@@ -538,6 +639,11 @@ const AgentInterface = () => {
                                 <span className="truncate text-sm font-medium">{session.title}</span>
                             </div>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
+                                    className="p-1.5 rounded-md hover:bg-violet-500/10 hover:text-violet-400 transition-colors"
+                                    title="Edit Session"
+                                ><Settings size={12} /></button>
                                 <button
                                     onClick={e => { e.stopPropagation(); setSessionToClear(session.id); setIsClearModalOpen(true); }}
                                     className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
@@ -622,9 +728,13 @@ const AgentInterface = () => {
                                                 className="fixed w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-[101] overflow-hidden"
                                             >
                                                 <button
-                                                    onClick={() => { setIsCreateModalOpen(true); setIsHeaderMenuOpen(false); }}
+                                                    onClick={() => { handleOpenCreateModal(); setIsHeaderMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
                                                 ><Plus size={15} />New Session</button>
+                                                <button
+                                                    onClick={() => { if (activeSession) { handleOpenEditModal(activeSession); } setIsHeaderMenuOpen(false); }}
+                                                    className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
+                                                ><Settings size={15} />Edit Session</button>
                                                 <button
                                                     onClick={() => { if (activeSession) { setSessionToClear(activeSession.id); setIsClearModalOpen(true); } setIsHeaderMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
@@ -657,7 +767,7 @@ const AgentInterface = () => {
                             </p>
                         </div>
                         <button
-                            onClick={() => setIsCreateModalOpen(true)}
+                            onClick={handleOpenCreateModal}
                             className="flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white px-5 py-2.5 rounded-xl font-medium text-sm transition-all shadow-lg shadow-violet-900/30"
                         >
                             <Plus size={16} /> New Agent Session
@@ -671,57 +781,72 @@ const AgentInterface = () => {
                                 <p className="text-sm">Send a message to start the conversation.</p>
                             </div>
                         )}
-                        {activeSession.messages.map(msg => (
-                            <motion.div
-                                key={msg.id}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ duration: 0.2 }}
-                                className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-                            >
-                                {/* Avatar */}
-                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.role === 'user'
-                                    ? 'bg-blue-600/20 text-blue-400'
-                                    : 'bg-violet-500/20 text-violet-400'
-                                    }`}>
-                                    {msg.role === 'user' ? <User size={16} /> : <Zap size={16} />}
-                                </div>
+                        {activeSession.messages.map((msg, index) => {
+                            const currentDate = new Date(msg.timestamp);
+                            const prevMsg = activeSession.messages[index - 1];
+                            const prevDate = prevMsg ? new Date(prevMsg.timestamp) : null;
+                            const showDateSeparator = !prevDate || currentDate.toDateString() !== prevDate.toDateString();
 
-                                {/* Bubble */}
-                                <div className={`group max-w-[75%] flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                                    <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative ${msg.role === 'user'
-                                        ? 'bg-blue-600/20 border border-blue-500/20 text-slate-100 rounded-tr-sm'
-                                        : 'bg-slate-800/70 border border-slate-700/50 text-slate-200 rounded-tl-sm'
-                                        }`}>
-                                        {msg.toolCalls?.map((tc, i) => (
-                                            <ToolCallBlock key={i} toolName={tc.name} args={tc.args} result={tc.result} />
-                                        ))}
-                                        {msg.isStreaming && (!msg.content || !msg.content.trim()) ? (
-                                            <div className="flex gap-1 h-5 items-center px-1">
-                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
+                            return (
+                                <React.Fragment key={msg.id}>
+                                    {showDateSeparator && (
+                                        <div className="flex justify-center my-6">
+                                            <span className="bg-slate-800/80 backdrop-blur-sm border border-slate-700/50 text-slate-400 text-xs font-medium py-1 px-4 rounded-full shadow-sm">
+                                                {currentDate.toLocaleDateString([], { month: 'long', day: 'numeric', year: currentDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}
+                                            </span>
+                                        </div>
+                                    )}
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.2 }}
+                                        className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+                                    >
+                                        {/* Avatar */}
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 mt-1 ${msg.role === 'user'
+                                            ? 'bg-blue-600/20 text-blue-400'
+                                            : 'bg-violet-500/20 text-violet-400'
+                                            }`}>
+                                            {msg.role === 'user' ? <User size={16} /> : <Zap size={16} />}
+                                        </div>
+
+                                        {/* Bubble */}
+                                        <div className={`group max-w-[75%] flex flex-col gap-1 ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                                            <div className={`px-4 py-3 rounded-2xl text-sm leading-relaxed relative ${msg.role === 'user'
+                                                ? 'bg-blue-600/20 border border-blue-500/20 text-slate-100 rounded-tr-sm'
+                                                : 'bg-slate-800/70 border border-slate-700/50 text-slate-200 rounded-tl-sm'
+                                                }`}>
+                                                {msg.toolCalls?.map((tc, i) => (
+                                                    <ToolCallBlock key={i} toolName={tc.name} args={tc.args} result={tc.result} />
+                                                ))}
+                                                {msg.isStreaming && (!msg.content || !msg.content.trim()) ? (
+                                                    <div className="flex gap-1 h-5 items-center px-1">
+                                                        <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                                        <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                                        <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
+                                                    </div>
+                                                ) : (
+                                                    renderMessageContent(msg.content)
+                                                )}
                                             </div>
-                                        ) : (
-                                            renderMessageContent(msg.content)
-                                        )}
-                                    </div>
-                                    {/* Actions */}
-                                    <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                                        <button
-                                            onClick={() => handleCopyMessage(msg.content, msg.id)}
-                                            className="p-1 rounded hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors"
-                                            title="Copy"
-                                        >
-                                            {copiedMessageId === msg.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
-                                        </button>
-                                        <span className="text-[10px] text-slate-600 px-1">
-                                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                        </span>
-                                    </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                            {/* Actions */}
+                                            <div className={`flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
+                                                <button
+                                                    onClick={() => handleCopyMessage(msg.content, msg.id)}
+                                                    className="p-1 rounded hover:bg-slate-700/50 text-slate-500 hover:text-slate-300 transition-colors"
+                                                    title="Copy"
+                                                >
+                                                    {copiedMessageId === msg.id ? <Check size={12} className="text-green-400" /> : <Copy size={12} />}
+                                                </button>
+                                                <span className="text-[10px] text-slate-600 px-1">
+                                                    {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </motion.div>
+                                </React.Fragment>
+                            );
+                        })}
                         <div ref={messagesEndRef} />
                     </div>
                 )}
@@ -736,7 +861,7 @@ const AgentInterface = () => {
                                 onKeyDown={handleKeyDown}
                                 placeholder="Message the agent..."
                                 rows={1}
-                                className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none max-h-32 custom-scrollbar leading-relaxed"
+                                className="flex-1 bg-transparent text-sm text-slate-200 placeholder-slate-500 resize-none outline-none min-h-[36px] py-[6px] max-h-32 custom-scrollbar leading-relaxed"
                                 style={{ overflowY: inputValue.split('\n').length > 4 ? 'auto' : 'hidden' }}
                                 disabled={isStreaming}
                             />
@@ -883,7 +1008,9 @@ const AgentInterface = () => {
                                         <div className="w-9 h-9 rounded-xl bg-violet-500/10 flex items-center justify-center">
                                             <Zap size={18} className="text-violet-400" />
                                         </div>
-                                        <h3 className="text-base font-semibold text-slate-100">New Agent Session</h3>
+                                        <h3 className="text-base font-semibold text-slate-100">
+                                            {modalMode === 'create' ? 'New Agent Session' : 'Edit Agent Session'}
+                                        </h3>
                                     </div>
                                     <button onClick={() => setIsCreateModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
                                         <X size={16} />
@@ -896,7 +1023,7 @@ const AgentInterface = () => {
                                             type="text"
                                             value={newSessionTitle}
                                             onChange={e => setNewSessionTitle(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleCreateSession()}
+                                            onKeyDown={e => e.key === 'Enter' && handleSaveSession()}
                                             placeholder="e.g. Research Assistant"
                                             autoFocus
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
@@ -912,10 +1039,32 @@ const AgentInterface = () => {
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all resize-none"
                                         />
                                     </div>
-                                    {/* Future: Agent selection, tool pinning, etc. */}
-                                    <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-800/40 border border-slate-700/30">
-                                        <Info size={13} className="text-slate-500 shrink-0" />
-                                        <p className="text-[11px] text-slate-500">{systemTools.length + ownerTools.length} tool{(systemTools.length + ownerTools.length) !== 1 ? 's' : ''} will be available in this session.</p>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Available Tools</label>
+                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-40 custom-scrollbar p-1">
+                                            {[...systemTools, ...ownerTools].length === 0 ? (
+                                                <div className="p-3 text-center text-[11px] text-slate-500">No tools found.</div>
+                                            ) : [...systemTools, ...ownerTools].map(t => {
+                                                const isSelected = newSessionTools.includes(t.name);
+                                                return (
+                                                    <div
+                                                        key={t.name}
+                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name])}
+                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                    >
+                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
+                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-xs font-medium text-slate-300 font-mono truncate">{t.name}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-2 px-1 text-right">
+                                            {newSessionTools.length} tool{newSessionTools.length !== 1 ? 's' : ''} selected
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex gap-3 p-6 pt-0">
@@ -924,9 +1073,11 @@ const AgentInterface = () => {
                                         className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 text-sm font-medium transition-all"
                                     >Cancel</button>
                                     <button
-                                        onClick={handleCreateSession}
+                                        onClick={handleSaveSession}
                                         className="flex-1 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-all shadow-lg shadow-violet-900/30"
-                                    >Create Session</button>
+                                    >
+                                        {modalMode === 'create' ? 'Create Session' : 'Save Changes'}
+                                    </button>
                                 </div>
                             </motion.div>
                         </motion.div>

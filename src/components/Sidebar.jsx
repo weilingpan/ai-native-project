@@ -62,7 +62,7 @@ const Sidebar = () => {
     const navItems = [
         { id: 'home', icon: Home, label: 'Dashboard', path: '/', restricted: true },
         { id: 'chat', icon: MessageSquare, label: 'Chat Session', path: '/chat' },
-        { id: 'agent', icon: Bot, label: 'Agent Session', path: '/agents' },
+        { id: 'agent', icon: Bot, label: 'Agent Session', path: '/agent' },
         { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
         { id: 'settings', icon: Settings, label: 'Settings', path: '/settings', restricted: true },
     ].filter(item => userRole === 'Admin' || !item.restricted);
@@ -71,7 +71,7 @@ const Sidebar = () => {
         const currentPath = location.pathname;
         if (currentPath === '/') return 'home';
         if (currentPath.startsWith('/chat')) return 'chat';
-        if (currentPath.startsWith('/agents')) return 'agent';
+        if (currentPath.startsWith('/agent')) return 'agent';
         const found = navItems.find(item => item.path !== '/' && currentPath.startsWith(item.path));
         return found ? found.id : '';
     };
