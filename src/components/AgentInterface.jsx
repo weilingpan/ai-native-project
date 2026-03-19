@@ -229,7 +229,7 @@ const AgentInterface = () => {
     const fetchSessions = async () => {
         try {
             const username = localStorage.getItem('username') || 'regina';
-            const response = await fetch(`/chat_session/?owner=${username}`);
+            const response = await fetch(`/chat_session/?owner=${username}&mode=agent`);
             if (!response.ok) throw new Error('Failed to fetch sessions');
 
             const data = await response.json();
