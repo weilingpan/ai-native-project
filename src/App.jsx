@@ -1,6 +1,7 @@
 import React from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
+import AgentInterface from './components/AgentInterface';
 import Dashboard from './components/Dashboard';
 import ComingSoon from './components/ComingSoon';
 import Login from './components/Login';
@@ -47,6 +48,21 @@ function App() {
                                 <RequireAuth>
                                     <PageWrapper>
                                         <ChatInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
+
+                            <Route path="/agent" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <AgentInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
+                            <Route path="/agent/:session_id" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <AgentInterface />
                                     </PageWrapper>
                                 </RequireAuth>
                             } />

@@ -82,14 +82,26 @@ const Dashboard = () => {
         );
     }
 
-    if (error && currentUserRole === 'Admin') {
+    if (error) {
         return (
-            <div className="flex-1 h-full flex flex-col items-center justify-center relative overflow-hidden text-white/90">
-                <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-                <p className="text-red-400">{error}</p>
+            <div className="flex-1 h-full flex flex-col items-center justify-center relative overflow-hidden text-white/90 gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                    <AlertCircle className="w-8 h-8 text-red-400" />
+                </div>
+                <div className="text-center space-y-1">
+                    <p className="text-red-400 font-medium">Failed to load dashboard</p>
+                    <p className="text-slate-500 text-sm max-w-xs">{error}</p>
+                </div>
+                <button
+                    onClick={() => window.location.reload()}
+                    className="mt-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700/50 text-slate-300 text-sm font-medium transition-all"
+                >
+                    Retry
+                </button>
             </div>
         );
     }
+
 
     return (
         <div className="flex-1 h-full flex flex-col relative overflow-hidden text-white/90 p-8">
