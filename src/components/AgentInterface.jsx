@@ -51,23 +51,36 @@ const renderMessageContent = (text) => {
 };
 
 // ── Tool Badge ────────────────────────────────────────────────────────────────
-const ToolBadge = ({ tool }) => (
-    <motion.div
-        initial={{ opacity: 0, y: 4 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="flex items-start gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-emerald-500/30 hover:bg-slate-800/80 transition-all group cursor-default"
-    >
-        <div className="mt-0.5 w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 group-hover:bg-emerald-500/20 transition-colors">
-            <Wrench size={14} className="text-emerald-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-slate-200 font-mono">{tool.name}</p>
-            {tool.description && (
-                <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{tool.description}</p>
-            )}
-        </div>
-    </motion.div>
-);
+const ToolBadge = ({ tool, variant = 'system' }) => {
+    const isSystem = variant === 'system';
+    const colors = isSystem
+        ? { border: 'hover:border-emerald-500/30', icon: 'bg-emerald-500/10 group-hover:bg-emerald-500/20', iconText: 'text-emerald-400', dot: 'bg-emerald-500' }
+        : { border: 'hover:border-violet-500/30', icon: 'bg-violet-500/10 group-hover:bg-violet-500/20', iconText: 'text-violet-400', dot: 'bg-violet-400' };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`flex items-start gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/40 ${colors.border} hover:bg-slate-800/80 transition-all group cursor-default`}
+        >
+            <div className={`mt-0.5 w-7 h-7 rounded-lg ${colors.icon} flex items-center justify-center shrink-0 transition-colors`}>
+                <Wrench size={14} className={colors.iconText} />
+            </div>
+            <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-slate-200 font-mono truncate">{tool.name}</p>
+                    {tool.has_implementation && (
+                        <span className={`w-1.5 h-1.5 rounded-full ${colors.dot} shrink-0`} title="Has implementation" />
+                    )}
+                </div>
+                {tool.description && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{tool.description}</p>
+                )}
+            </div>
+        </motion.div>
+    );
+};
+
 
 // ── Tool Call Block (shown inside messages when agent uses a tool) ─────────────
 const ToolCallBlock = ({ toolName, args, result }) => {
@@ -130,7 +143,8 @@ const AgentInterface = () => {
     const messagesEndRef = useRef(null);
 
     // Tools panel
-    const [tools, setTools] = useState([]);
+    const [systemTools, setSystemTools] = useState([]);
+    const [ownerTools, setOwnerTools] = useState([]);
     const [loadingTools, setLoadingTools] = useState(true);
     const [showToolsPanel, setShowToolsPanel] = useState(true);
 
@@ -181,14 +195,28 @@ const AgentInterface = () => {
     const fetchTools = async () => {
         try {
             setLoadingTools(true);
-            const res = await fetch('/agent/tools');
-            if (!res.ok) throw new Error('Failed to fetch tools');
-            const data = await res.json();
-            // Accept array or {tools: [...]}
-            setTools(Array.isArray(data) ? data : (data.tools || []));
+            const username = localStorage.getItem('username') || '';
+            const [sysRes, ownerRes] = await Promise.all([
+                fetch('/agent/tools'),
+                username ? fetch(`/agent/tools?owner=${username}`) : Promise.resolve(null),
+            ]);
+
+            if (!sysRes.ok) throw new Error('Failed to fetch system tools');
+            const sysData = await sysRes.json();
+            setSystemTools(Array.isArray(sysData) ? sysData : (sysData.tools || []));
+
+            if (ownerRes && ownerRes.ok) {
+                const ownerData = await ownerRes.json();
+                // Exclude any that are already system-owned (owner === 'system')
+                const ownerList = Array.isArray(ownerData) ? ownerData : (ownerData.tools || []);
+                setOwnerTools(ownerList.filter(t => t.owner !== 'system'));
+            } else {
+                setOwnerTools([]);
+            }
         } catch (err) {
             console.error('Error fetching tools:', err);
-            setTools([]);
+            setSystemTools([]);
+            setOwnerTools([]);
         } finally {
             setLoadingTools(false);
         }
@@ -206,7 +234,7 @@ const AgentInterface = () => {
                     : (parsed[0]?.id || null);
                 setActiveSessionId(initial);
                 if (initial && urlSessionId !== initial) {
-                    navigate(`/agent/${initial}`, { replace: true });
+                    navigate(`/agents/${initial}`, { replace: true });
                 }
             }
         } catch (e) {
@@ -232,7 +260,7 @@ const AgentInterface = () => {
         setSessions(updated);
         persistSessions(updated);
         setActiveSessionId(id);
-        navigate(`/agent/${id}`);
+        navigate(`/agents/${id}`);
         setIsCreateModalOpen(false);
         setNewSessionTitle('');
         setNewSessionDesc('');
@@ -247,7 +275,7 @@ const AgentInterface = () => {
         if (activeSessionId === sessionToDelete) {
             const next = updated[0]?.id || null;
             setActiveSessionId(next);
-            if (next) navigate(`/agent/${next}`); else navigate('/agent');
+            if (next) navigate(`/agents/${next}`); else navigate('/agents');
         }
         setIsDeleteModalOpen(false);
         setSessionToDelete(null);
@@ -266,7 +294,7 @@ const AgentInterface = () => {
 
     const handleSelectSession = (id) => {
         setActiveSessionId(id);
-        navigate(`/agent/${id}`);
+        navigate(`/agents/${id}`);
         if (isMobile) setMobileView('chat');
     };
 
@@ -323,6 +351,7 @@ const AgentInterface = () => {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let botText = '';
+            let toolCalls = [];
             let buffer = '';
 
             while (true) {
@@ -346,7 +375,23 @@ const AgentInterface = () => {
                             json = JSON.parse(dataStr);
                         }
                         if (json) {
-                            const content = json.data ?? json.content ?? json.text
+                            if (json.tool_start) {
+                                toolCalls.push({
+                                    name: json.tool_start,
+                                    args: typeof json.input === 'string' ? json.input : JSON.stringify(json.input || {}),
+                                    result: null
+                                });
+                            }
+                            if (json.tool_end) {
+                                for (let i = toolCalls.length - 1; i >= 0; i--) {
+                                    if (toolCalls[i].name === json.tool_end && toolCalls[i].result === null) {
+                                        toolCalls[i].result = typeof json.output === 'string' ? json.output : JSON.stringify(json.output);
+                                        break;
+                                    }
+                                }
+                            }
+                            
+                            const content = json.data ?? json.content ?? json.text 
                                 ?? json.choices?.[0]?.delta?.content ?? '';
                             if (content) botText += content;
                         }
@@ -361,7 +406,7 @@ const AgentInterface = () => {
                         ? {
                             ...s,
                             messages: s.messages.map(m =>
-                                m.id === botMsgId ? { ...m, content: captured } : m
+                                m.id === botMsgId ? { ...m, content: captured, toolCalls: [...toolCalls] } : m
                             )
                         }
                         : s
@@ -374,11 +419,8 @@ const AgentInterface = () => {
                     s.id === activeSessionId
                         ? {
                             ...s,
-                            title: s.messages.length <= 2 && text.length > 0
-                                ? (text.length > 28 ? text.slice(0, 28) + '…' : text)
-                                : s.title,
                             messages: s.messages.map(m =>
-                                m.id === botMsgId ? { ...m, content: botText, isStreaming: false } : m
+                                m.id === botMsgId ? { ...m, content: botText, toolCalls: [...toolCalls], isStreaming: false } : m
                             )
                         }
                         : s
@@ -531,7 +573,7 @@ const AgentInterface = () => {
                             </h2>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-[11px] text-slate-400">{tools.length} tools available</span>
+                                <span className="text-[11px] text-slate-400">{systemTools.length + ownerTools.length} tools available</span>
                             </div>
                         </div>
                     </div>
@@ -611,7 +653,7 @@ const AgentInterface = () => {
                         <div className="text-center space-y-2">
                             <h3 className="text-xl font-semibold text-slate-200">Agent Sessions</h3>
                             <p className="text-sm text-slate-500 max-w-sm">
-                                Create a new session to start interacting with the AI agent. The agent has access to {tools.length} registered tool{tools.length !== 1 ? 's' : ''}.
+                                Create a new session to start interacting with the AI agent. The agent has access to {systemTools.length + ownerTools.length} registered tool{(systemTools.length + ownerTools.length) !== 1 ? 's' : ''}.
                             </p>
                         </div>
                         <button
@@ -654,15 +696,11 @@ const AgentInterface = () => {
                                         {msg.toolCalls?.map((tc, i) => (
                                             <ToolCallBlock key={i} toolName={tc.name} args={tc.args} result={tc.result} />
                                         ))}
-                                        {msg.isStreaming && !msg.content ? (
-                                            <div className="flex items-center gap-1.5 py-1">
-                                                {[0, 1, 2].map(i => (
-                                                    <motion.div key={i}
-                                                        className="w-1.5 h-1.5 rounded-full bg-violet-400"
-                                                        animate={{ opacity: [0.3, 1, 0.3], scale: [0.8, 1.1, 0.8] }}
-                                                        transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
-                                                    />
-                                                ))}
+                                        {msg.isStreaming && (!msg.content || !msg.content.trim()) ? (
+                                            <div className="flex gap-1 h-5 items-center px-1">
+                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
+                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
+                                                <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce"></span>
                                             </div>
                                         ) : (
                                             renderMessageContent(msg.content)
@@ -743,7 +781,7 @@ const AgentInterface = () => {
                                 <Wrench size={15} className="text-emerald-400" />
                                 <span className="text-sm font-semibold text-slate-200">Available Tools</span>
                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-                                    {tools.length}
+                                    {systemTools.length + ownerTools.length}
                                 </span>
                             </div>
                             <button
@@ -755,20 +793,57 @@ const AgentInterface = () => {
                             </button>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                        <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
                             {loadingTools ? (
                                 <div className="flex flex-col gap-2 mt-4">
                                     {[1, 2, 3].map(i => (
                                         <div key={i} className="h-14 rounded-xl bg-slate-800/50 animate-pulse" />
                                     ))}
                                 </div>
-                            ) : tools.length === 0 ? (
+                            ) : systemTools.length === 0 && ownerTools.length === 0 ? (
                                 <div className="flex flex-col items-center justify-center py-12 text-slate-600 gap-3">
                                     <Wrench size={28} className="opacity-30" />
                                     <p className="text-xs text-center">No tools registered.<br />Check backend.</p>
                                 </div>
                             ) : (
-                                tools.map((tool, i) => <ToolBadge key={tool.name || i} tool={tool} />)
+                                <>
+                                    {/* System Tools */}
+                                    {systemTools.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2 px-1">
+                                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">System</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono border border-slate-700/50">{systemTools.length}</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {systemTools.map((tool, i) => <ToolBadge key={tool.name || i} tool={tool} variant="system" />)}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Owner Tools */}
+                                    {ownerTools.length > 0 && (
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-2 px-1">
+                                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">My Tools</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono border border-slate-700/50">{ownerTools.length}</span>
+                                            </div>
+                                            <div className="space-y-2">
+                                                {ownerTools.map((tool, i) => <ToolBadge key={tool.name || i} tool={tool} variant="owner" />)}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Empty owner section hint */}
+                                    {ownerTools.length === 0 && (
+                                        <div className="px-1">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">My Tools</span>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-600 font-mono border border-slate-700/50">0</span>
+                                            </div>
+                                            <p className="text-[11px] text-slate-600 pl-1">No custom tools yet.</p>
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -840,7 +915,7 @@ const AgentInterface = () => {
                                     {/* Future: Agent selection, tool pinning, etc. */}
                                     <div className="flex items-center gap-2 p-3 rounded-xl bg-slate-800/40 border border-slate-700/30">
                                         <Info size={13} className="text-slate-500 shrink-0" />
-                                        <p className="text-[11px] text-slate-500">{tools.length} tool{tools.length !== 1 ? 's' : ''} will be available in this session.</p>
+                                        <p className="text-[11px] text-slate-500">{systemTools.length + ownerTools.length} tool{(systemTools.length + ownerTools.length) !== 1 ? 's' : ''} will be available in this session.</p>
                                     </div>
                                 </div>
                                 <div className="flex gap-3 p-6 pt-0">

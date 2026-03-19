@@ -52,14 +52,14 @@ function App() {
                                 </RequireAuth>
                             } />
 
-                            <Route path="/agent" element={
+                            <Route path="/agents" element={
                                 <RequireAuth>
                                     <PageWrapper>
                                         <AgentInterface />
                                     </PageWrapper>
                                 </RequireAuth>
                             } />
-                            <Route path="/agent/:session_id" element={
+                            <Route path="/agents/:session_id" element={
                                 <RequireAuth>
                                     <PageWrapper>
                                         <AgentInterface />
