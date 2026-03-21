@@ -790,10 +790,10 @@ const AgentInterface = () => {
                         {!isMobile && !showToolsPanel && (
                             <button
                                 onClick={() => setShowToolsPanel(true)}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
                                 title="Open tool store"
                             >
-                                <Wrench size={15} />
+                                <ChevronLeft size={15} />
                             </button>
                         )}
                         {/* Header Menu */}
@@ -1020,7 +1020,7 @@ const AgentInterface = () => {
                                     className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
                                     title="Collapse tool store"
                                 >
-                                    <X size={13} />
+                                    <ChevronRight size={14} />
                                 </button>
                             </div>
                         </div>
