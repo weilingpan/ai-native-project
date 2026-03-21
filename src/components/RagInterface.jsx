@@ -149,11 +149,19 @@ const RagInterface = () => {
     // ── API helpers ───────────────────────────────────────────────────────────
     const fetchSessions = async () => {
         try {
-            const res = await fetch('/rag_session', { headers: { accept: 'application/json' } });
+            const username = localStorage.getItem('username') || 'regina';
+            const res = await fetch(`/chat_session/?owner=${username}&mode=rag`);
             if (!res.ok) throw new Error();
             const data = await res.json();
-            const list = Array.isArray(data) ? data : (data.sessions || []);
-            setSessions(list.map(s => ({ ...s, messages: s.messages || [] })));
+            const ragSessions = (Array.isArray(data) ? data : [])
+                .filter(s => s.mode === 'rag')
+                .map(s => ({
+                    ...s,
+                    messages: s.messages || [],
+                    timestamp: s.created_at || new Date().toISOString(),
+                }))
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            setSessions(ragSessions);
         } catch {
             setSessions([]);
         }
@@ -192,10 +200,18 @@ const RagInterface = () => {
         if (!newSessionTitle.trim() || isCreating) return;
         setIsCreating(true);
         try {
-            const res = await fetch('/rag_session', {
+            const username = localStorage.getItem('username') || 'regina';
+            const res = await fetch('/chat_session/', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newSessionTitle.trim(), description: newSessionDesc.trim(), model: newSessionModel, mode: 'rag' }),
+                body: JSON.stringify({
+                    owner: username,
+                    mode: 'rag',
+                    session_type: 'text',
+                    title: newSessionTitle.trim(),
+                    description: newSessionDesc.trim(),
+                    model: newSessionModel,
+                }),
             });
             if (!res.ok) throw new Error();
             const created = await res.json();
@@ -218,7 +234,7 @@ const RagInterface = () => {
     const handleDeleteSession = async () => {
         if (!sessionToDelete) return;
         try {
-            await fetch(`/rag_session/${sessionToDelete}`, { method: 'DELETE' });
+            await fetch(`/chat_session/${sessionToDelete}`, { method: 'DELETE' });
         } catch { /* ignore */ }
         const remaining = sessions.filter(s => s.id !== sessionToDelete);
         setSessions(remaining);
