@@ -120,6 +120,13 @@ const AgentInterface = () => {
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
     const [sessionToClear, setSessionToClear] = useState(null);
 
+    // Create Tool modal
+    const [isCreateToolModalOpen, setIsCreateToolModalOpen] = useState(false);
+    const [newToolName, setNewToolName] = useState('');
+    const [newToolDesc, setNewToolDesc] = useState('');
+    const [newToolWebhookUrl, setNewToolWebhookUrl] = useState('');
+    const [isCreatingTool, setIsCreatingTool] = useState(false);
+
     // Header menu
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
     const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
@@ -354,6 +361,37 @@ const AgentInterface = () => {
 
         setIsClearModalOpen(false);
         setSessionToClear(null);
+    };
+
+    const handleCreateTool = async () => {
+        const name = newToolName.trim();
+        const webhookUrl = newToolWebhookUrl.trim();
+        if (!name || !webhookUrl) return;
+
+        const username = localStorage.getItem('username') || '';
+        setIsCreatingTool(true);
+        try {
+            const response = await fetch('/agent/tools', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    owner: username,
+                    description: newToolDesc.trim(),
+                    metadata: { webhook_url: webhookUrl },
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to create tool');
+            setIsCreateToolModalOpen(false);
+            setNewToolName('');
+            setNewToolDesc('');
+            setNewToolWebhookUrl('');
+            fetchTools();
+        } catch (err) {
+            console.error('Error creating tool:', err);
+        } finally {
+            setIsCreatingTool(false);
+        }
     };
 
     const handleSelectSession = (id) => {
@@ -673,21 +711,15 @@ const AgentInterface = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {/* Tools Panel Toggle */}
-                        {!isMobile && (
+                        {!isMobile && !showToolsPanel && (
                             <button
-                                onClick={() => setShowToolsPanel(v => !v)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${showToolsPanel
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/50'
-                                    }`}
-                                title="Toggle tools panel"
+                                onClick={() => setShowToolsPanel(true)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                                title="Open tool store"
                             >
-                                <Wrench size={13} />
-                                Tools
+                                <Wrench size={15} />
                             </button>
                         )}
-
                         {/* Header Menu */}
                         <div className="relative">
                             <button
@@ -727,11 +759,6 @@ const AgentInterface = () => {
                                                     onClick={() => { if (activeSession) { setSessionToClear(activeSession.id); setIsClearModalOpen(true); } setIsHeaderMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
                                                 ><Eraser size={15} />Clear History</button>
-                                                <div className="h-px bg-slate-700/50 mx-2" />
-                                                <button
-                                                    onClick={() => { fetchTools(); setIsHeaderMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
-                                                ><RefreshCw size={15} />Refresh Tools</button>
                                             </motion.div>
                                         </>
                                     )}
@@ -904,13 +931,22 @@ const AgentInterface = () => {
                                     {systemTools.length + ownerTools.length}
                                 </span>
                             </div>
-                            <button
-                                onClick={fetchTools}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                                title="Refresh tools"
-                            >
-                                <RefreshCw size={13} className={loadingTools ? 'animate-spin' : ''} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={fetchTools}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                                    title="Refresh tools"
+                                >
+                                    <RefreshCw size={13} className={loadingTools ? 'animate-spin' : ''} />
+                                </button>
+                                <button
+                                    onClick={() => setShowToolsPanel(false)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+                                    title="Collapse tool store"
+                                >
+                                    <X size={13} />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
@@ -967,15 +1003,13 @@ const AgentInterface = () => {
                             )}
                         </div>
 
-                        {/* Future: Create Tool Button */}
                         <div className="p-3 border-t border-slate-700/50">
                             <button
-                                disabled
-                                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-700/50 text-slate-600 text-xs cursor-not-allowed hover:border-slate-600 transition-colors"
-                                title="Coming soon"
+                                onClick={() => setIsCreateToolModalOpen(true)}
+                                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-violet-500/30 text-violet-400 text-xs hover:bg-violet-500/10 hover:border-violet-500/50 transition-colors"
                             >
                                 <Plus size={13} />
-                                Create Tool <span className="text-[10px] text-slate-700">(coming soon)</span>
+                                Create Tool
                             </button>
                         </div>
                     </motion.div>
@@ -1146,6 +1180,85 @@ const AgentInterface = () => {
                                 <div className="flex gap-3">
                                     <button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 text-sm font-medium transition-all">Cancel</button>
                                     <button onClick={handleClearSession} className="flex-1 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium transition-all">Clear</button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+            {/* ── Create Tool Modal ────────────────────────────────────────────── */}
+            {createPortal(
+                <AnimatePresence>
+                    {isCreateToolModalOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+                            onClick={() => setIsCreateToolModalOpen(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 16 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                                onClick={e => e.stopPropagation()}
+                                className="w-full max-w-md bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl"
+                            >
+                                <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                            <Wrench size={18} className="text-emerald-400" />
+                                        </div>
+                                        <h3 className="text-base font-semibold text-slate-100">Create Tool</h3>
+                                    </div>
+                                    <button onClick={() => setIsCreateToolModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool Name <span className="text-red-400">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={newToolName}
+                                            onChange={e => setNewToolName(e.target.value)}
+                                            placeholder="e.g. my_current_time"
+                                            autoFocus
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description <span className="text-slate-600">(optional)</span></label>
+                                        <input
+                                            type="text"
+                                            value={newToolDesc}
+                                            onChange={e => setNewToolDesc(e.target.value)}
+                                            placeholder="What does this tool do?"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Webhook URL <span className="text-red-400">*</span></label>
+                                        <input
+                                            type="url"
+                                            value={newToolWebhookUrl}
+                                            onChange={e => setNewToolWebhookUrl(e.target.value)}
+                                            placeholder="https://your-server/tools/endpoint"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 p-6 pt-0">
+                                    <button
+                                        onClick={() => setIsCreateToolModalOpen(false)}
+                                        className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 text-sm font-medium transition-all"
+                                    >Cancel</button>
+                                    <button
+                                        onClick={handleCreateTool}
+                                        disabled={!newToolName.trim() || !newToolWebhookUrl.trim() || isCreatingTool}
+                                        className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all shadow-lg shadow-emerald-900/30"
+                                    >
+                                        {isCreatingTool ? 'Creating…' : 'Create Tool'}
+                                    </button>
                                 </div>
                             </motion.div>
                         </motion.div>
