@@ -87,7 +87,9 @@ const RagInterface = () => {
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
     const [newSessionModel, setNewSessionModel] = useState('');
+    const [newSessionDocs, setNewSessionDocs] = useState([]);
     const [availableModels, setAvailableModels] = useState([]);
+    const [availableDocs, setAvailableDocs] = useState([]);
     const [loadingModels, setLoadingModels] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
@@ -109,6 +111,7 @@ const RagInterface = () => {
     useEffect(() => {
         fetchSessions();
         fetchModels();
+        fetchAvailableDocs();
     }, []);
 
     useEffect(() => {
@@ -185,6 +188,26 @@ const RagInterface = () => {
         }
     };
 
+    const fetchAvailableDocs = async () => {
+        try {
+            const owner = localStorage.getItem('username') || 'regina';
+            const res = await fetch(`/documents?collection=documents&owner=${owner}`, {
+                headers: { accept: 'application/json' },
+            });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const seen = new Set();
+            const unique = (Array.isArray(data) ? data : []).filter(d => {
+                if (seen.has(d.filename)) return false;
+                seen.add(d.filename);
+                return true;
+            });
+            setAvailableDocs(unique.map(d => ({ id: d.doc_id, name: d.filename })));
+        } catch {
+            setAvailableDocs([]);
+        }
+    };
+
     const fetchFiles = async () => {
         try {
             const owner = localStorage.getItem('username') || 'regina';
@@ -221,6 +244,7 @@ const RagInterface = () => {
                     title: newSessionTitle.trim(),
                     description: newSessionDesc.trim(),
                     model: newSessionModel,
+                    metadata: { doc_ids: newSessionDocs },
                 }),
             });
             if (!res.ok) throw new Error();
@@ -233,6 +257,7 @@ const RagInterface = () => {
             setNewSessionTitle('');
             setNewSessionDesc('');
             setNewSessionModel(availableModels[0]?.name || '');
+            setNewSessionDocs([]);
             if (isMobile) setMobileView('chat');
         } catch (err) {
             console.error('Failed to create session:', err);
@@ -297,7 +322,8 @@ const RagInterface = () => {
         abortControllerRef.current = controller;
 
         try {
-            const docId = files.find(f => f.status === 'ready')?.id;
+            const docId = activeSession?.metadata?.doc_ids?.[0]
+                || files.find(f => f.status === 'ready')?.id;
             const res = await fetch('/documents/query', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', accept: 'application/json' },
@@ -926,14 +952,46 @@ const RagInterface = () => {
                                         )}
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description</label>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description <span className="text-slate-600">(optional)</span></label>
                                         <textarea
                                             value={newSessionDesc}
                                             onChange={e => setNewSessionDesc(e.target.value)}
-                                            placeholder="What documents will you upload? (optional)"
+                                            placeholder="What will you ask about?"
                                             rows={2}
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all resize-none"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Documents</label>
+                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-40 custom-scrollbar p-1">
+                                            {availableDocs.length === 0 ? (
+                                                <div className="p-3 text-center text-[11px] text-slate-500">No documents uploaded yet.</div>
+                                            ) : availableDocs.map(doc => {
+                                                const isSelected = newSessionDocs.includes(doc.id);
+                                                return (
+                                                    <div
+                                                        key={doc.id}
+                                                        onClick={() => setNewSessionDocs(prev =>
+                                                            prev.includes(doc.id)
+                                                                ? prev.filter(id => id !== doc.id)
+                                                                : [...prev, doc.id]
+                                                        )}
+                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                    >
+                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600 group-hover:border-emerald-400'}`}>
+                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                        </div>
+                                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                            <FileText size={12} className="text-slate-500 shrink-0" />
+                                                            <p className="text-xs font-medium text-slate-300 truncate">{doc.name}</p>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-2 px-1 text-right">
+                                            {newSessionDocs.length} document{newSessionDocs.length !== 1 ? 's' : ''} selected
+                                        </p>
                                     </div>
                                 </div>
                                 <div className="flex justify-end gap-3 px-6 pb-6">
