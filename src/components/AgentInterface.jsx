@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     Send, Bot, User, Plus, Trash2, Eraser, ChevronLeft, MoreVertical,
-    Copy, Check, Search, Settings, Wrench, Zap, ChevronDown, ChevronRight,
+    Copy, Check, Search, Settings, Wrench, Zap,
     Terminal, Play, Square, RefreshCw, Info, Cpu, X, AlertCircle
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -81,50 +81,6 @@ const ToolBadge = ({ tool, variant = 'system' }) => {
     );
 };
 
-
-// ── Tool Call Block (shown inside messages when agent uses a tool) ─────────────
-const ToolCallBlock = ({ toolName, args, result }) => {
-    const [isOpen, setIsOpen] = useState(false);
-    return (
-        <div className="my-2 rounded-lg border border-violet-500/20 bg-violet-950/20 overflow-hidden">
-            <button
-                onClick={() => setIsOpen(v => !v)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-violet-500/5 transition-colors"
-            >
-                <Terminal size={13} className="text-violet-400 shrink-0" />
-                <span className="text-xs font-mono text-violet-300 flex-1 truncate">Tool: {toolName}</span>
-                {isOpen ? <ChevronDown size={13} className="text-violet-500" /> : <ChevronRight size={13} className="text-violet-500" />}
-            </button>
-            <AnimatePresence>
-                {isOpen && (
-                    <motion.div
-                        initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
-                        className="overflow-hidden"
-                    >
-                        <div className="px-3 pb-3 space-y-2 border-t border-violet-500/10">
-                            {args && (
-                                <div>
-                                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1 mt-2">Input</p>
-                                    <pre className="font-mono text-[11px] text-slate-300 bg-slate-900/60 rounded-lg p-2 overflow-x-auto">
-                                        {typeof args === 'string' ? args : JSON.stringify(args, null, 2)}
-                                    </pre>
-                                </div>
-                            )}
-                            {result && (
-                                <div>
-                                    <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">Output</p>
-                                    <pre className="font-mono text-[11px] text-emerald-300/80 bg-slate-900/60 rounded-lg p-2 overflow-x-auto">
-                                        {typeof result === 'string' ? result : JSON.stringify(result, null, 2)}
-                                    </pre>
-                                </div>
-                            )}
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-};
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 const AgentInterface = () => {
@@ -848,9 +804,16 @@ const AgentInterface = () => {
                                                 ? 'bg-blue-600/20 border border-blue-500/20 text-slate-100 rounded-tr-sm'
                                                 : 'bg-slate-800/70 border border-slate-700/50 text-slate-200 rounded-tl-sm'
                                                 }`}>
-                                                {msg.toolCalls?.map((tc, i) => (
-                                                    <ToolCallBlock key={i} toolName={tc.name} args={tc.args} result={tc.result} />
-                                                ))}
+                                                {msg.toolCalls?.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 mb-2">
+                                                        {msg.toolCalls.map((tc, i) => (
+                                                            <span key={i} className="inline-flex items-center gap-1 text-[11px] font-mono text-violet-300 bg-violet-950/40 border border-violet-500/20 rounded-full px-2 py-0.5">
+                                                                <Terminal size={10} className="shrink-0" />
+                                                                {tc.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                                 {msg.isStreaming && (!msg.content || !msg.content.trim()) ? (
                                                     <div className="flex gap-1 h-5 items-center px-1">
                                                         <span className="w-1.5 h-1.5 bg-violet-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
