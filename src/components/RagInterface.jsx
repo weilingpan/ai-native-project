@@ -264,7 +264,7 @@ const RagInterface = () => {
         if (isMobile) setMobileView('chat');
     };
 
-    // ── Chat / SSE ────────────────────────────────────────────────────────────
+    // ── Chat ─────────────────────────────────────────────────────────────────
     const handleSend = async () => {
         const text = inputValue.trim();
         if (!text || isStreaming || !activeSessionId) return;
@@ -297,55 +297,29 @@ const RagInterface = () => {
         abortControllerRef.current = controller;
 
         try {
-            const res = await fetch(`/rag_session/${activeSessionId}/chat`, {
+            const docId = files.find(f => f.status === 'ready')?.id;
+            const res = await fetch('/documents/query', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: text }),
+                headers: { 'Content-Type': 'application/json', accept: 'application/json' },
+                body: JSON.stringify({
+                    human_message: text,
+                    doc_id: docId,
+                    chat_session_id: activeSessionId,
+                }),
                 signal: controller.signal,
             });
             if (!res.ok) throw new Error('Request failed');
 
-            const reader = res.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-            let botText = '';
-            let sourcesAccumulated = [];
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    const raw = line.startsWith('data: ') ? line.slice(6) : line;
-                    if (!raw.trim() || raw === '[DONE]') continue;
-                    try {
-                        const json = JSON.parse(raw);
-                        if (json.content) botText += json.content;
-                        if (json.sources) sourcesAccumulated = json.sources;
-                        setSessions(prev => prev.map(s =>
-                            s.id === activeSessionId
-                                ? {
-                                    ...s, messages: s.messages.map(m =>
-                                        m.id === botMsgId
-                                            ? { ...m, content: botText, sources: sourcesAccumulated }
-                                            : m
-                                    )
-                                }
-                                : s
-                        ));
-                    } catch { /* non-JSON line */ }
-                }
-            }
+            const data = await res.json();
+            const botText = data.answer || data.response || data.content || JSON.stringify(data);
+            const sources = data.sources || [];
 
             setSessions(prev => prev.map(s =>
                 s.id === activeSessionId
                     ? {
                         ...s, messages: s.messages.map(m =>
                             m.id === botMsgId
-                                ? { ...m, content: botText, sources: sourcesAccumulated, isStreaming: false }
+                                ? { ...m, content: botText, sources, isStreaming: false }
                                 : m
                         )
                     }
