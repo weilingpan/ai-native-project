@@ -885,28 +885,32 @@ const RagInterface = () => {
             {createPortal(
                 <AnimatePresence>
                     {isCreateModalOpen && (
-                        <>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+                            onClick={() => setIsCreateModalOpen(false)}
+                        >
                             <motion.div
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                onClick={() => setIsCreateModalOpen(false)}
-                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                initial={{ opacity: 0, scale: 0.95, y: 16 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                transition={{ duration: 0.15 }}
-                                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl z-[201] p-6"
+                                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                                onClick={e => e.stopPropagation()}
+                                className="w-full max-w-md max-h-[90vh] bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl overflow-y-auto"
                             >
-                                <h2 className="text-base font-bold text-slate-100 mb-4 flex items-center gap-2">
-                                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                                        <Database size={14} className="text-emerald-400" />
+                                <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                            <Database size={18} className="text-emerald-400" />
+                                        </div>
+                                        <h3 className="text-base font-semibold text-slate-100">New RAG Session</h3>
                                     </div>
-                                    New RAG Session
-                                </h2>
-                                <div className="space-y-3">
+                                    <button onClick={() => setIsCreateModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div className="p-6 space-y-4">
                                     <div>
-                                        <label className="text-xs text-slate-400 font-medium mb-1.5 block">Session Name *</label>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Session Name *</label>
                                         <input
                                             type="text"
                                             value={newSessionTitle}
@@ -914,11 +918,11 @@ const RagInterface = () => {
                                             onKeyDown={e => e.key === 'Enter' && handleCreateSession()}
                                             placeholder="e.g. Product Documentation Q&A"
                                             autoFocus
-                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-xs text-slate-400 font-medium mb-1.5 block">LLM Model *</label>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">LLM Model *</label>
                                         {loadingModels ? (
                                             <div className="flex items-center gap-2 text-xs text-slate-500 py-2.5">
                                                 <RefreshCw size={12} className="animate-spin" />
@@ -928,7 +932,7 @@ const RagInterface = () => {
                                             <select
                                                 value={newSessionModel}
                                                 onChange={e => setNewSessionModel(e.target.value)}
-                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all appearance-none cursor-pointer"
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all appearance-none cursor-pointer"
                                             >
                                                 {availableModels.map(m => (
                                                     <option key={m.name} value={m.name}>{m.name}</option>
@@ -937,17 +941,17 @@ const RagInterface = () => {
                                         )}
                                     </div>
                                     <div>
-                                        <label className="text-xs text-slate-400 font-medium mb-1.5 block">Description</label>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description</label>
                                         <textarea
                                             value={newSessionDesc}
                                             onChange={e => setNewSessionDesc(e.target.value)}
                                             placeholder="What documents will you upload? (optional)"
                                             rows={2}
-                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all resize-none"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all resize-none"
                                         />
                                     </div>
                                 </div>
-                                <div className="flex justify-end gap-2 mt-5">
+                                <div className="flex justify-end gap-3 px-6 pb-6">
                                     <button
                                         onClick={() => setIsCreateModalOpen(false)}
                                         className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800 transition-colors"
@@ -962,7 +966,7 @@ const RagInterface = () => {
                                     </button>
                                 </div>
                             </motion.div>
-                        </>
+                        </motion.div>
                     )}
                 </AnimatePresence>,
                 document.body
@@ -972,24 +976,25 @@ const RagInterface = () => {
             {createPortal(
                 <AnimatePresence>
                     {isDeleteModalOpen && (
-                        <>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+                            onClick={() => setIsDeleteModalOpen(false)}
+                        >
                             <motion.div
-                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                                onClick={() => setIsDeleteModalOpen(false)}
-                                className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200]"
-                            />
-                            <motion.div
-                                initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                initial={{ opacity: 0, scale: 0.95, y: 16 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                transition={{ duration: 0.15 }}
-                                className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl z-[201] p-6"
+                                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                                onClick={e => e.stopPropagation()}
+                                className="w-full max-w-sm bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl"
                             >
-                                <h2 className="text-base font-bold text-slate-100 mb-2">Delete Session?</h2>
-                                <p className="text-sm text-slate-400 mb-5">
-                                    This will permanently delete the session, all messages, and all uploaded files.
-                                </p>
-                                <div className="flex justify-end gap-2">
+                                <div className="p-6">
+                                    <h2 className="text-base font-bold text-slate-100 mb-2">Delete Session?</h2>
+                                    <p className="text-sm text-slate-400">
+                                        This will permanently delete the session, all messages, and all uploaded files.
+                                    </p>
+                                </div>
+                                <div className="flex justify-end gap-3 px-6 pb-6">
                                     <button
                                         onClick={() => setIsDeleteModalOpen(false)}
                                         className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800 transition-colors"
@@ -1000,7 +1005,7 @@ const RagInterface = () => {
                                     >Delete</button>
                                 </div>
                             </motion.div>
-                        </>
+                        </motion.div>
                     )}
                 </AnimatePresence>,
                 document.body
