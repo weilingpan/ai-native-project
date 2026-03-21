@@ -266,7 +266,14 @@ const AgentInterface = () => {
                 if (!response.ok) throw new Error('Failed to fetch history');
                 const data = await response.json();
                 const items = Array.isArray(data) ? data : (data.messages || []);
-                const sorted = [...items].sort((a, b) => (a.message_order || 0) - (b.message_order || 0));
+                const sorted = [...items]
+                    .sort((a, b) => (a.message_order || 0) - (b.message_order || 0))
+                    .map(({ used_tools, ...item }) => ({
+                        ...item,
+                        toolCalls: item.role === 'assistant'
+                            ? (used_tools || []).map(name => ({ name, args: null, result: null }))
+                            : [],
+                    }));
 
                 setSessions(prev => prev.map(s =>
                     s.id === activeSessionId ? { ...s, messages: sorted } : s
