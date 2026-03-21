@@ -86,6 +86,9 @@ const RagInterface = () => {
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
+    const [newSessionModel, setNewSessionModel] = useState('');
+    const [availableModels, setAvailableModels] = useState([]);
+    const [loadingModels, setLoadingModels] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
     const [isCreating, setIsCreating] = useState(false);
@@ -105,6 +108,7 @@ const RagInterface = () => {
     // ── Effects ──────────────────────────────────────────────────────────────
     useEffect(() => {
         fetchSessions();
+        fetchModels();
     }, []);
 
     useEffect(() => {
@@ -155,6 +159,24 @@ const RagInterface = () => {
         }
     };
 
+    const fetchModels = async () => {
+        setLoadingModels(true);
+        try {
+            const res = await fetch('/llm_openai/models');
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const models = data.models || [];
+            setAvailableModels(models);
+            if (models.length > 0) setNewSessionModel(models[0].name);
+        } catch {
+            const fallback = [{ name: 'gpt-4o' }, { name: 'gpt-4o-mini' }];
+            setAvailableModels(fallback);
+            setNewSessionModel(fallback[0].name);
+        } finally {
+            setLoadingModels(false);
+        }
+    };
+
     const fetchFiles = async (sessionId) => {
         try {
             const res = await fetch(`/rag_session/${sessionId}/files`, { headers: { accept: 'application/json' } });
@@ -173,7 +195,7 @@ const RagInterface = () => {
             const res = await fetch('/rag_session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newSessionTitle.trim(), description: newSessionDesc.trim() }),
+                body: JSON.stringify({ title: newSessionTitle.trim(), description: newSessionDesc.trim(), model: newSessionModel }),
             });
             if (!res.ok) throw new Error();
             const created = await res.json();
@@ -184,6 +206,7 @@ const RagInterface = () => {
             setIsCreateModalOpen(false);
             setNewSessionTitle('');
             setNewSessionDesc('');
+            setNewSessionModel(availableModels[0]?.name || '');
             if (isMobile) setMobileView('chat');
         } catch (err) {
             console.error('Failed to create session:', err);
@@ -559,10 +582,10 @@ const RagInterface = () => {
                     </div>
 
                     {/* Messages */}
-                    <div className="flex-1 overflow-y-auto custom-scrollbar px-4 py-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col px-4 py-4">
                         {!activeSession ? (
                             // Empty state — no session selected
-                            <div className="h-full flex flex-col items-center justify-center gap-4 text-slate-600">
+                            <div className="flex-1 flex flex-col items-center justify-center gap-4 text-slate-600">
                                 <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                                     <Database size={28} className="text-emerald-500/60" />
                                 </div>
@@ -580,7 +603,7 @@ const RagInterface = () => {
                             </div>
                         ) : messages.length === 0 ? (
                             // Session exists but no messages yet
-                            <div className="h-full flex flex-col items-center justify-center gap-3 text-slate-600">
+                            <div className="flex-1 flex flex-col items-center justify-center gap-3 text-slate-600">
                                 <div className="w-14 h-14 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
                                     <Zap size={22} className="text-emerald-500/60" />
                                 </div>
@@ -590,7 +613,8 @@ const RagInterface = () => {
                                 </div>
                             </div>
                         ) : (
-                            messages.map(msg => (
+                            <div className="space-y-4">
+                            {messages.map(msg => (
                                 <div
                                     key={msg.id}
                                     className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -644,7 +668,8 @@ const RagInterface = () => {
                                         </span>
                                     </div>
                                 </div>
-                            ))
+                            ))}
+                            </div>
                         )}
                         <div ref={messagesEndRef} />
                     </div>
@@ -891,6 +916,25 @@ const RagInterface = () => {
                                             autoFocus
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs text-slate-400 font-medium mb-1.5 block">LLM Model *</label>
+                                        {loadingModels ? (
+                                            <div className="flex items-center gap-2 text-xs text-slate-500 py-2.5">
+                                                <RefreshCw size={12} className="animate-spin" />
+                                                Loading models...
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={newSessionModel}
+                                                onChange={e => setNewSessionModel(e.target.value)}
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all appearance-none cursor-pointer"
+                                            >
+                                                {availableModels.map(m => (
+                                                    <option key={m.name} value={m.name}>{m.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="text-xs text-slate-400 font-medium mb-1.5 block">Description</label>
