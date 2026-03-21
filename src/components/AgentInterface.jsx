@@ -289,7 +289,7 @@ const AgentInterface = () => {
         setEditingSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDesc(session.description || '');
-        setNewSessionModel(session.model || availableModels[0]?.name || '');
+        setNewSessionModel(session.model_name || session.model || availableModels[0]?.name || '');
         setNewSessionTools(session.tools || []);
         setIsCreateModalOpen(true);
     };
@@ -302,7 +302,7 @@ const AgentInterface = () => {
             session_type: 'text',
             title: newSessionTitle.trim() || 'New Agent Session',
             description: newSessionDesc.trim() || '',
-            model: newSessionModel,
+            model_name: newSessionModel,
             metadata: { tools: newSessionTools }
         };
 
@@ -343,6 +343,7 @@ const AgentInterface = () => {
                             ...s,
                             title: payload.title,
                             description: payload.description,
+                            model_name: payload.model_name,
                             tools: newSessionTools
                         };
                     }
@@ -1165,26 +1166,55 @@ const AgentInterface = () => {
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool store</label>
-                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-40 custom-scrollbar p-1">
-                                            {[...systemTools, ...ownerTools].length === 0 ? (
+                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-48 custom-scrollbar p-1">
+                                            {systemTools.length === 0 && ownerTools.length === 0 ? (
                                                 <div className="p-3 text-center text-[11px] text-slate-500">No tools found.</div>
-                                            ) : [...systemTools, ...ownerTools].map(t => {
-                                                const isSelected = newSessionTools.includes(t.name);
-                                                return (
-                                                    <div
-                                                        key={t.name}
-                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name])}
-                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
-                                                    >
-                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
-                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-xs font-medium text-slate-300 font-mono truncate">{t.name}</p>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                            ) : (
+                                                <>
+                                                    {systemTools.length > 0 && (
+                                                        <>
+                                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 pt-1.5 pb-1">System</p>
+                                                            {systemTools.map(t => {
+                                                                const isSelected = newSessionTools.includes(t.name);
+                                                                return (
+                                                                    <div
+                                                                        key={t.name}
+                                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(n => n !== t.name) : [...prev, t.name])}
+                                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                                    >
+                                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
+                                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                                        </div>
+                                                                        <p className="text-xs font-medium text-slate-300 font-mono truncate flex-1 min-w-0">{t.name}</p>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </>
+                                                    )}
+                                                    {ownerTools.length > 0 && (
+                                                        <>
+                                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 pt-2 pb-1">
+                                                                {localStorage.getItem('username') || 'User'}
+                                                            </p>
+                                                            {ownerTools.map(t => {
+                                                                const isSelected = newSessionTools.includes(t.name);
+                                                                return (
+                                                                    <div
+                                                                        key={t.name}
+                                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(n => n !== t.name) : [...prev, t.name])}
+                                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                                    >
+                                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
+                                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                                        </div>
+                                                                        <p className="text-xs font-medium text-slate-300 font-mono truncate flex-1 min-w-0">{t.name}</p>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                         <p className="text-[10px] text-slate-500 mt-2 px-1 text-right">
                                             {newSessionTools.length} tool{newSessionTools.length !== 1 ? 's' : ''} selected

@@ -5,7 +5,7 @@ import {
     Plus, Search, ChevronLeft, ChevronRight, X, Send, Square,
     Database, FileText, Upload, Trash2, RefreshCw, Check,
     AlertCircle, Copy, CheckCheck, MoreVertical, Zap, Bot,
-    Info
+    Info, Settings
 } from 'lucide-react';
 import classNames from 'classnames';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -76,6 +76,7 @@ const RagInterface = () => {
 
     // Knowledge Base
     const [files, setFiles] = useState([]);
+    const [loadingFiles, setLoadingFiles] = useState(false);
     const [isDragOver, setIsDragOver] = useState(false);
     const fileInputRef = useRef(null);
 
@@ -84,6 +85,8 @@ const RagInterface = () => {
 
     // Modals
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+    const [modalMode, setModalMode] = useState('create');
+    const [editingSessionId, setEditingSessionId] = useState(null);
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
     const [newSessionModel, setNewSessionModel] = useState('');
@@ -130,9 +133,28 @@ const RagInterface = () => {
     }, [sessions, urlSessionId]);
 
     useEffect(() => {
-        if (activeSessionId) {
-            fetchFiles();
-        }
+        if (!activeSessionId) return;
+        fetchFiles();
+        const loadHistory = async () => {
+            try {
+                const res = await fetch(`/chat_session/${activeSessionId}/history`);
+                if (!res.ok) throw new Error();
+                const data = await res.json();
+                const items = Array.isArray(data) ? data : (data.messages || []);
+                const sorted = [...items]
+                    .sort((a, b) => (a.message_order || 0) - (b.message_order || 0))
+                    .map(({ created_at, ...item }) => ({
+                        ...item,
+                        timestamp: created_at || new Date().toISOString(),
+                    }));
+                setSessions(prev => prev.map(s =>
+                    s.id === activeSessionId ? { ...s, messages: sorted } : s
+                ));
+            } catch {
+                // keep empty messages on error
+            }
+        };
+        loadHistory();
     }, [activeSessionId]);
 
     useEffect(() => {
@@ -209,6 +231,7 @@ const RagInterface = () => {
     };
 
     const fetchFiles = async () => {
+        setLoadingFiles(true);
         try {
             const owner = localStorage.getItem('username') || 'regina';
             const res = await fetch(`/documents?collection=documents&owner=${owner}`, {
@@ -226,41 +249,75 @@ const RagInterface = () => {
             setFiles(unique.map(d => ({ id: d.doc_id, name: d.filename, status: 'ready' })));
         } catch {
             setFiles([]);
+        } finally {
+            setLoadingFiles(false);
         }
     };
 
-    const handleCreateSession = async () => {
+    const closeSessionModal = () => {
+        setIsCreateModalOpen(false);
+        setModalMode('create');
+        setEditingSessionId(null);
+        setNewSessionTitle('');
+        setNewSessionDesc('');
+        setNewSessionModel(availableModels[0]?.name || '');
+        setNewSessionDocs([]);
+    };
+
+    const handleOpenEditModal = (session) => {
+        setModalMode('edit');
+        setEditingSessionId(session.id);
+        setNewSessionTitle(session.title);
+        setNewSessionDesc(session.description || '');
+        setNewSessionModel(session.model_name || session.model || availableModels[0]?.name || '');
+        setNewSessionDocs(session.metadata?.doc_ids || []);
+        setIsCreateModalOpen(true);
+    };
+
+    const handleSaveSession = async () => {
         if (!newSessionTitle.trim() || isCreating) return;
         setIsCreating(true);
         try {
             const username = localStorage.getItem('username') || 'regina';
-            const res = await fetch('/chat_session/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    owner: username,
-                    mode: 'rag',
-                    session_type: 'text',
-                    title: newSessionTitle.trim(),
-                    description: newSessionDesc.trim(),
-                    model: newSessionModel,
-                    metadata: { doc_ids: newSessionDocs },
-                }),
-            });
-            if (!res.ok) throw new Error();
-            const created = await res.json();
-            const newSession = { ...created, messages: [] };
-            setSessions(prev => [newSession, ...prev]);
-            setActiveSessionId(newSession.id);
-            navigate(`/rag/${newSession.id}`);
-            setIsCreateModalOpen(false);
-            setNewSessionTitle('');
-            setNewSessionDesc('');
-            setNewSessionModel(availableModels[0]?.name || '');
-            setNewSessionDocs([]);
-            if (isMobile) setMobileView('chat');
+            const payload = {
+                owner: username,
+                mode: 'rag',
+                session_type: 'text',
+                title: newSessionTitle.trim(),
+                description: newSessionDesc.trim(),
+                model_name: newSessionModel,
+                metadata: { doc_ids: newSessionDocs },
+            };
+
+            if (modalMode === 'create') {
+                const res = await fetch('/chat_session/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error();
+                const created = await res.json();
+                const newSession = { ...created, messages: [] };
+                setSessions(prev => [newSession, ...prev]);
+                setActiveSessionId(newSession.id);
+                navigate(`/rag/${newSession.id}`);
+                if (isMobile) setMobileView('chat');
+            } else {
+                const res = await fetch(`/chat_session/${editingSessionId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
+                if (!res.ok) throw new Error();
+                setSessions(prev => prev.map(s =>
+                    s.id === editingSessionId
+                        ? { ...s, title: payload.title, description: payload.description, model_name: payload.model_name, metadata: payload.metadata }
+                        : s
+                ));
+            }
+            closeSessionModal();
         } catch (err) {
-            console.error('Failed to create session:', err);
+            console.error('Failed to save session:', err);
         } finally {
             setIsCreating(false);
         }
@@ -336,16 +393,48 @@ const RagInterface = () => {
             });
             if (!res.ok) throw new Error('Request failed');
 
-            const data = await res.json();
-            const botText = data.answer || data.response || data.content || JSON.stringify(data);
-            const sources = data.sources || [];
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let accumulated = '';
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunk = decoder.decode(value, { stream: true });
+                const lines = chunk.split('\n');
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed.startsWith('data:')) continue;
+                    const jsonStr = trimmed.slice(5).trim();
+                    if (!jsonStr) continue;
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        if (parsed.data !== undefined) {
+                            accumulated += parsed.data;
+                            setSessions(prev => prev.map(s =>
+                                s.id === activeSessionId
+                                    ? {
+                                        ...s, messages: s.messages.map(m =>
+                                            m.id === botMsgId
+                                                ? { ...m, content: accumulated, isStreaming: true }
+                                                : m
+                                        )
+                                    }
+                                    : s
+                            ));
+                        }
+                    } catch { /* skip malformed lines */ }
+                }
+            }
 
             setSessions(prev => prev.map(s =>
                 s.id === activeSessionId
                     ? {
                         ...s, messages: s.messages.map(m =>
                             m.id === botMsgId
-                                ? { ...m, content: botText, sources, isStreaming: false }
+                                ? { ...m, isStreaming: false }
                                 : m
                         )
                     }
@@ -431,7 +520,16 @@ const RagInterface = () => {
         }
     }, [activeSessionId]);
 
-    const handleDeleteFile = (fileId) => {
+    const handleDeleteFile = async (fileId) => {
+        try {
+            const res = await fetch(`/documents/${fileId}?collection=documents`, {
+                method: 'DELETE',
+                headers: { accept: '*/*' },
+            });
+            if (!res.ok) throw new Error();
+        } catch {
+            // still remove from UI even if API call fails
+        }
         setFiles(prev => prev.filter(f => f.id !== fileId));
     };
 
@@ -537,6 +635,11 @@ const RagInterface = () => {
                                     </div>
                                     <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                         <button
+                                            onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
+                                            className="p-1 rounded hover:bg-emerald-500/10 hover:text-emerald-400 transition-colors"
+                                            title="Edit"
+                                        ><Settings size={11} /></button>
+                                        <button
                                             onClick={e => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteModalOpen(true); }}
                                             className="p-1 rounded hover:bg-red-500/10 hover:text-red-400 transition-colors"
                                             title="Delete"
@@ -575,9 +678,39 @@ const RagInterface = () => {
                             <div className="w-6 h-6 rounded-md bg-emerald-500/20 flex items-center justify-center shrink-0">
                                 <Database size={13} className="text-emerald-400" />
                             </div>
-                            <span className="text-sm font-semibold truncate text-slate-200">
-                                {activeSession?.title || 'RAG Session'}
-                            </span>
+                            <div className="group relative cursor-default flex flex-col justify-center min-w-0">
+                                <h2 className="text-sm font-semibold text-slate-200 leading-tight truncate">
+                                    {activeSession?.title || 'RAG Session'}
+                                </h2>
+                                <div className="flex items-center gap-1.5">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                                    <span className="text-[11px] text-slate-400">
+                                        {activeSession?.metadata?.doc_ids?.length || 0} doc{(activeSession?.metadata?.doc_ids?.length || 0) !== 1 ? 's' : ''} referenced
+                                    </span>
+                                </div>
+
+                                {/* Hover Doc IDs Popover */}
+                                <div className="absolute top-10 left-0 mt-1 opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity duration-200 z-[120]">
+                                    <div className="bg-slate-800 border border-slate-700/50 rounded-xl shadow-xl p-3 w-max min-w-[160px] max-w-[260px]">
+                                        <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-2">Referenced Documents</p>
+                                        {activeSession?.metadata?.doc_ids?.length > 0 ? (
+                                            <ul className="space-y-1.5">
+                                                {activeSession.metadata.doc_ids.map(id => {
+                                                    const doc = availableDocs.find(d => d.id === id);
+                                                    return (
+                                                        <li key={id} className="flex items-center gap-2 text-xs text-emerald-400">
+                                                            <div className="w-1 h-1 rounded-full bg-emerald-500 shrink-0" />
+                                                            <span className="truncate">{doc ? doc.name : id}</span>
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-[11px] text-slate-500">No documents configured</p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         {/* KB panel reopen */}
@@ -734,18 +867,30 @@ const RagInterface = () => {
                         className="bg-slate-900/90 border-l border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl overflow-hidden"
                     >
                         {/* KB Header */}
-                        <div className="h-12 border-b border-slate-700/50 flex items-center justify-between px-3 shrink-0">
+                        <div className="h-16 border-b border-slate-700/50 flex items-center justify-between px-4 shrink-0">
                             <div className="flex items-center gap-2">
-                                <Upload size={13} className="text-emerald-400" />
-                                <span className="text-xs font-semibold text-slate-300">Knowledge Base</span>
+                                <Database size={15} className="text-emerald-400" />
+                                <span className="text-sm font-semibold text-slate-200">Knowledge Base</span>
+                                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
+                                    {files.length}
+                                </span>
                             </div>
-                            <button
-                                onClick={() => setIsKBPanelOpen(false)}
-                                className="p-1 rounded text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
-                                title="Collapse"
-                            >
-                                <ChevronRight size={14} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={fetchFiles}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                                    title="Refresh documents"
+                                >
+                                    <RefreshCw size={13} className={loadingFiles ? 'animate-spin' : ''} />
+                                </button>
+                                <button
+                                    onClick={() => setIsKBPanelOpen(false)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+                                    title="Collapse"
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         {/* Upload Zone */}
@@ -838,10 +983,6 @@ const RagInterface = () => {
                             ))}
                         </div>
 
-                        {/* KB Footer */}
-                        <div className="px-3 py-2 border-t border-slate-700/50 text-[10px] text-slate-500">
-                            {files.length} file{files.length !== 1 ? 's' : ''} · {files.filter(f => f.status === 'ready').length} ready
-                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -899,7 +1040,7 @@ const RagInterface = () => {
                         <motion.div
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                             className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
-                            onClick={() => setIsCreateModalOpen(false)}
+                            onClick={closeSessionModal}
                         >
                             <motion.div
                                 initial={{ opacity: 0, scale: 0.95, y: 16 }}
@@ -913,9 +1054,11 @@ const RagInterface = () => {
                                         <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
                                             <Database size={18} className="text-emerald-400" />
                                         </div>
-                                        <h3 className="text-base font-semibold text-slate-100">New RAG Session</h3>
+                                        <h3 className="text-base font-semibold text-slate-100">
+                                            {modalMode === 'edit' ? 'Edit RAG Session' : 'New RAG Session'}
+                                        </h3>
                                     </div>
-                                    <button onClick={() => setIsCreateModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+                                    <button onClick={closeSessionModal} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
                                         <X size={16} />
                                     </button>
                                 </div>
@@ -926,7 +1069,7 @@ const RagInterface = () => {
                                             type="text"
                                             value={newSessionTitle}
                                             onChange={e => setNewSessionTitle(e.target.value)}
-                                            onKeyDown={e => e.key === 'Enter' && handleCreateSession()}
+                                            onKeyDown={e => e.key === 'Enter' && handleSaveSession()}
                                             placeholder="e.g. Product Documentation Q&A"
                                             autoFocus
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
@@ -996,16 +1139,16 @@ const RagInterface = () => {
                                 </div>
                                 <div className="flex justify-end gap-3 px-6 pb-6">
                                     <button
-                                        onClick={() => setIsCreateModalOpen(false)}
+                                        onClick={closeSessionModal}
                                         className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800 transition-colors"
                                     >Cancel</button>
                                     <button
-                                        onClick={handleCreateSession}
+                                        onClick={handleSaveSession}
                                         disabled={!newSessionTitle.trim() || isCreating}
                                         className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex items-center gap-2"
                                     >
                                         {isCreating && <RefreshCw size={13} className="animate-spin" />}
-                                        Create
+                                        {modalMode === 'edit' ? 'Save' : 'Create'}
                                     </button>
                                 </div>
                             </motion.div>
