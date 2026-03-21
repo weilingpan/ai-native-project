@@ -265,13 +265,12 @@ const AgentInterface = () => {
                 const response = await fetch(`/chat_session/${activeSessionId}/history`);
                 if (!response.ok) throw new Error('Failed to fetch history');
                 const data = await response.json();
+                const items = Array.isArray(data) ? data : (data.messages || []);
+                const sorted = [...items].sort((a, b) => (a.message_order || 0) - (b.message_order || 0));
 
-                setSessions(prev => prev.map(s => {
-                    if (s.id === activeSessionId) {
-                        return { ...s, messages: data.messages || [] };
-                    }
-                    return s;
-                }));
+                setSessions(prev => prev.map(s =>
+                    s.id === activeSessionId ? { ...s, messages: sorted } : s
+                ));
             } catch (error) {
                 console.error("Error fetching run history:", error);
             }
@@ -530,6 +529,14 @@ const AgentInterface = () => {
                 );
                 return updated;
             });
+
+            if (botText.trim()) {
+                fetch(`/chat_session/${activeSessionId}/history`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_content: text, ai_content: botText })
+                }).catch(e => console.error('Failed to save agent history:', e));
+            }
 
         } catch (err) {
             if (err.name === 'AbortError') {
