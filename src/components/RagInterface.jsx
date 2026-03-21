@@ -195,7 +195,7 @@ const RagInterface = () => {
             const res = await fetch('/rag_session', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title: newSessionTitle.trim(), description: newSessionDesc.trim(), model: newSessionModel }),
+                body: JSON.stringify({ title: newSessionTitle.trim(), description: newSessionDesc.trim(), model: newSessionModel, mode: 'rag' }),
             });
             if (!res.ok) throw new Error();
             const created = await res.json();
