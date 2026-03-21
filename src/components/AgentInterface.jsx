@@ -117,7 +117,10 @@ const AgentInterface = () => {
     const [editingSessionId, setEditingSessionId] = useState(null);
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
+    const [newSessionModel, setNewSessionModel] = useState('');
     const [newSessionTools, setNewSessionTools] = useState([]);
+    const [availableModels, setAvailableModels] = useState([]);
+    const [loadingModels, setLoadingModels] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
@@ -144,6 +147,7 @@ const AgentInterface = () => {
     useEffect(() => {
         fetchTools();
         fetchSessions();
+        fetchModels();
     }, []);
 
     useEffect(() => {
@@ -187,6 +191,25 @@ const AgentInterface = () => {
             setOwnerTools([]);
         } finally {
             setLoadingTools(false);
+        }
+    };
+
+    // ── Fetch Models ──────────────────────────────────────────────────────────
+    const fetchModels = async () => {
+        setLoadingModels(true);
+        try {
+            const res = await fetch('/llm_openai/models');
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const models = data.models || [];
+            setAvailableModels(models);
+            if (models.length > 0) setNewSessionModel(models[0].name);
+        } catch {
+            const fallback = [{ name: 'gpt-4o' }, { name: 'gpt-4o-mini' }];
+            setAvailableModels(fallback);
+            setNewSessionModel(fallback[0].name);
+        } finally {
+            setLoadingModels(false);
         }
     };
 
@@ -266,6 +289,7 @@ const AgentInterface = () => {
         setEditingSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDesc(session.description || '');
+        setNewSessionModel(session.model || availableModels[0]?.name || '');
         setNewSessionTools(session.tools || []);
         setIsCreateModalOpen(true);
     };
@@ -278,6 +302,7 @@ const AgentInterface = () => {
             session_type: 'text',
             title: newSessionTitle.trim() || 'New Agent Session',
             description: newSessionDesc.trim() || '',
+            model: newSessionModel,
             metadata: { tools: newSessionTools }
         };
 
@@ -327,6 +352,7 @@ const AgentInterface = () => {
             setIsCreateModalOpen(false);
             setNewSessionTitle('');
             setNewSessionDesc('');
+            setNewSessionModel(availableModels[0]?.name || '');
             setEditingSessionId(null);
             setModalMode('create');
         } catch (error) {
@@ -1117,6 +1143,25 @@ const AgentInterface = () => {
                                             rows={2}
                                             className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all resize-none"
                                         />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">LLM Model</label>
+                                        {loadingModels ? (
+                                            <div className="flex items-center gap-2 text-xs text-slate-500 py-2.5">
+                                                <RefreshCw size={12} className="animate-spin" />
+                                                Loading models...
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={newSessionModel}
+                                                onChange={e => setNewSessionModel(e.target.value)}
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all appearance-none cursor-pointer"
+                                            >
+                                                {availableModels.map(m => (
+                                                    <option key={m.name} value={m.name}>{m.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool store</label>
