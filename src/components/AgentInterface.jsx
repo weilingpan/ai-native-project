@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-    Send, Bot, User, Plus, Trash2, Eraser, ChevronLeft, MoreVertical,
+    Send, Bot, User, Plus, Trash2, Eraser, ChevronLeft, ChevronRight, MoreVertical,
     Copy, Check, Search, Settings, Wrench, Zap,
     Terminal, Play, Square, RefreshCw, Info, Cpu, X, AlertCircle
 } from 'lucide-react';
@@ -103,6 +103,9 @@ const AgentInterface = () => {
     const [ownerTools, setOwnerTools] = useState([]);
     const [loadingTools, setLoadingTools] = useState(true);
     const [showToolsPanel, setShowToolsPanel] = useState(true);
+    const [isSessionListOpen, setIsSessionListOpen] = useState(true);
+    const [hoveredSession, setHoveredSession] = useState(null);
+    const [sessionTitleOverflow, setSessionTitleOverflow] = useState(0);
 
     // Mobile
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -591,7 +594,7 @@ const AgentInterface = () => {
     };
 
     // ── Render ─────────────────────────────────────────────────────────────────
-    const showSessionList = !isMobile || mobileView === 'list';
+    const showSessionList = isMobile ? mobileView === 'list' : isSessionListOpen;
     const showChatArea = !isMobile || mobileView === 'chat';
     const filteredSessions = sessions.filter(s =>
         s.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -601,80 +604,127 @@ const AgentInterface = () => {
         <div className="flex h-full w-full bg-slate-900 text-slate-100 overflow-hidden relative">
 
             {/* ── Left: Session List ──────────────────────────────────────────── */}
-            <div className={`${showSessionList ? 'flex' : 'hidden'} ${isMobile ? 'w-full pt-16' : 'w-64'} bg-slate-900/90 border-r border-slate-700/50 flex-col flex-shrink-0 backdrop-blur-xl`}>
-                <div className="p-4 space-y-3">
-                    <button
-                        id="agent-new-session-btn"
-                        onClick={handleOpenCreateModal}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-violet-900/30 group"
+            <AnimatePresence initial={false}>
+                {showSessionList && (
+                    <motion.div
+                        initial={isMobile ? false : { width: 0, opacity: 0 }}
+                        animate={isMobile ? {} : { width: 200, opacity: 1 }}
+                        exit={isMobile ? {} : { width: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className={`${isMobile ? 'w-full pt-16' : ''} bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl overflow-hidden`}
                     >
-                        <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
-                        <span className="font-medium text-sm">New Agent Session</span>
-                    </button>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                        <input
-                            type="text"
-                            placeholder="Search sessions..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2 pl-8 pr-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
-                        />
-                    </div>
-                </div>
+                        <div className="p-2.5 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    id="agent-new-session-btn"
+                                    onClick={handleOpenCreateModal}
+                                    className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white py-2 px-3 rounded-lg transition-all shadow-md shadow-violet-900/30 group"
+                                >
+                                    <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300 shrink-0" />
+                                    <span className="font-medium text-xs whitespace-nowrap">New Session</span>
+                                </button>
+                                {!isMobile && (
+                                    <button
+                                        onClick={() => setIsSessionListOpen(false)}
+                                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors shrink-0"
+                                        title="Collapse session list"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg py-1.5 pl-7 pr-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
+                                />
+                            </div>
+                        </div>
 
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar pb-4">
-                    {filteredSessions.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 text-slate-600 gap-3">
-                            <Bot size={32} className="opacity-40" />
-                            <p className="text-xs text-center">No sessions yet.<br />Create one to get started.</p>
-                        </div>
-                    )}
-                    {filteredSessions.map(session => (
-                        <div
-                            key={session.id}
-                            onClick={() => handleSelectSession(session.id)}
-                            className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${activeSessionId === session.id
-                                ? 'bg-violet-900/30 border-violet-700/50 text-white shadow-md'
-                                : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                                }`}
-                        >
-                            <div className="flex items-center gap-2.5 overflow-hidden flex-1">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${activeSessionId === session.id ? 'bg-violet-500/20' : 'bg-slate-800'}`}>
-                                    <Zap size={14} className={activeSessionId === session.id ? 'text-violet-400' : 'text-slate-600'} />
+                        <div className="flex-1 overflow-y-auto px-1.5 space-y-0.5 custom-scrollbar pb-3">
+                            {filteredSessions.length === 0 && (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                                    <Bot size={24} className="opacity-40" />
+                                    <p className="text-[11px] text-center">No sessions yet.</p>
                                 </div>
-                                <span className="truncate text-sm font-medium">{session.title}</span>
-                            </div>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
-                                    className="p-1.5 rounded-md hover:bg-violet-500/10 hover:text-violet-400 transition-colors"
-                                    title="Edit Session"
-                                ><Settings size={12} /></button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); setSessionToClear(session.id); setIsClearModalOpen(true); }}
-                                    className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
-                                    title="Clear History"
-                                ><Eraser size={12} /></button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteModalOpen(true); }}
-                                    className="p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                                    title="Delete Session"
-                                ><Trash2 size={12} /></button>
-                            </div>
+                            )}
+                            {filteredSessions.map(session => (
+                                <div
+                                    key={session.id}
+                                    onClick={() => handleSelectSession(session.id)}
+                                    onMouseEnter={e => {
+                                        const span = e.currentTarget.querySelector('[data-title-span]');
+                                        if (span) setSessionTitleOverflow(Math.max(0, span.scrollWidth - span.offsetWidth));
+                                        setHoveredSession(session.id);
+                                    }}
+                                    onMouseLeave={() => { setHoveredSession(null); setSessionTitleOverflow(0); }}
+                                    className={`group flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer transition-all border ${activeSessionId === session.id
+                                        ? 'bg-violet-900/30 border-violet-700/50 text-white'
+                                        : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${activeSessionId === session.id ? 'bg-violet-500/20' : 'bg-slate-800'}`}>
+                                            <Zap size={11} className={activeSessionId === session.id ? 'text-violet-400' : 'text-slate-600'} />
+                                        </div>
+                                        <span
+                                            data-title-span
+                                            className="text-xs font-medium whitespace-nowrap"
+                                            style={hoveredSession === session.id && sessionTitleOverflow > 0 ? {
+                                                display: 'inline-block',
+                                                animation: `marquee-session ${Math.max(1.5, sessionTitleOverflow / 40)}s ease-in-out infinite alternate`,
+                                                '--marquee-dist': `-${sessionTitleOverflow}px`,
+                                            } : {
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                display: 'block',
+                                            }}
+                                        >{session.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                        <button
+                                            onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
+                                            className="p-1 rounded hover:bg-violet-500/10 hover:text-violet-400 transition-colors"
+                                            title="Edit"
+                                        ><Settings size={11} /></button>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setSessionToClear(session.id); setIsClearModalOpen(true); }}
+                                            className="p-1 rounded hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
+                                            title="Clear"
+                                        ><Eraser size={11} /></button>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteModalOpen(true); }}
+                                            className="p-1 rounded hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                                            title="Delete"
+                                        ><Trash2 size={11} /></button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-            </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ── Middle: Chat Area ───────────────────────────────────────────── */}
             <div className={`${showChatArea ? 'flex' : 'hidden'} flex-1 flex-col h-full relative overflow-hidden`}>
                 {/* Header */}
                 <div className={`h-16 border-b border-slate-700/50 flex items-center justify-between px-4 md:px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 ${isMobile ? 'pl-16' : ''}`}>
                     <div className="flex items-center gap-3">
-                        {isMobile && (
+                        {isMobile ? (
                             <button onClick={() => setMobileView('list')} className="p-1 hover:bg-slate-800 rounded-lg text-slate-400">
                                 <ChevronLeft size={22} />
+                            </button>
+                        ) : !isSessionListOpen && (
+                            <button
+                                onClick={() => setIsSessionListOpen(true)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-violet-400 hover:bg-slate-800 transition-colors"
+                                title="Open session list"
+                            >
+                                <ChevronRight size={15} />
                             </button>
                         )}
                         <div className="w-9 h-9 rounded-full bg-violet-500/20 flex items-center justify-center">

@@ -1018,79 +1018,79 @@ const ChatInterface = () => {
     return (
         <div className="flex h-full w-full bg-slate-900 text-text overflow-hidden relative">
             {/* Sessions Sidebar / List View */}
-            <div className={`${showSessionList ? 'flex' : 'hidden'} ${isMobile ? 'w-full pt-16' : 'w-64'} bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl transition-all duration-300`}>
-                <div className="p-4">
+            <div className={`${showSessionList ? 'flex' : 'hidden'} ${isMobile ? 'w-full pt-16' : 'w-[200px]'} bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl transition-all duration-300`}>
+                <div className="p-2.5 space-y-2">
                     <button
                         onClick={handleOpenCreateModal}
-                        className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-blue-900/20 group"
+                        className="w-full flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white py-2 px-3 rounded-lg transition-all shadow-md shadow-blue-900/20 group"
                     >
-                        <Plus size={20} className="group-hover:rotate-90 transition-transform duration-300" />
-                        <span className="font-medium">New Chat</span>
+                        <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300 shrink-0" />
+                        <span className="font-medium text-xs whitespace-nowrap">New Chat</span>
                     </button>
                     {isMobile && (
-                        <p className="text-center text-xs text-slate-500 mt-4">Select a chat to start messaging</p>
+                        <p className="text-center text-xs text-slate-500">Select a chat to start messaging</p>
                     )}
 
                     {/* Search Bar */}
-                    <div className="relative mt-3">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
                         <input
                             type="text"
                             placeholder="Search chats..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2 pl-9 pr-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
+                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg py-1.5 pl-7 pr-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                         />
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto px-1.5 space-y-0.5 custom-scrollbar pb-3">
                     {sessions.filter(session => session.title.toLowerCase().includes(searchQuery.toLowerCase())).map(session => (
                         <div
                             key={session.id}
                             onClick={() => handleSessionSelect(session.id)}
                             onMouseEnter={(e) => handleSessionHover(e, session.id)}
                             onMouseLeave={() => setHoveredSessionId(null)}
-                            className={`group flex items-center justify-between p-3 rounded-lg cursor-pointer transition-all border border-transparent relative ${activeSessionId === session.id
+                            className={`group flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer transition-all border border-transparent relative ${activeSessionId === session.id
                                 ? 'bg-slate-800 text-white border-slate-700/50 shadow-md'
                                 : 'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
                                 }`}
                         >
-                            <div className="flex items-center gap-3 overflow-hidden flex-1">
+                            <div className="flex items-center gap-2 overflow-hidden flex-1">
                                 {session.type === 'image' ? (
-                                    <ImageIcon size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
+                                    <ImageIcon size={14} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 ) : session.type === 'audio' ? (
-                                    <AudioWaveform size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-purple-400' : 'text-slate-600'}`} />
+                                    <AudioWaveform size={14} className={`shrink-0 ${activeSessionId === session.id ? 'text-purple-400' : 'text-slate-600'}`} />
                                 ) : (
-                                    <MessageSquare size={18} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
+                                    <MessageSquare size={14} className={`shrink-0 ${activeSessionId === session.id ? 'text-blue-400' : 'text-slate-600'}`} />
                                 )}
-                                <span className="truncate text-sm font-medium">{session.title}</span>
+                                <span className="truncate text-xs font-medium">{session.title}</span>
                             </div>
-                            <div className="flex items-center gap-1 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-0.5 opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                 <button
                                     onClick={(e) => {
                                         handleSessionSelect(session.id);
                                         handleOpenEditModal(e, session);
                                     }}
-                                    className="p-1.5 rounded-md hover:bg-slate-700 hover:text-slate-200 transition-colors"
+                                    className="p-1 rounded hover:bg-slate-700 hover:text-slate-200 transition-colors"
                                     title="Settings"
                                 >
-                                    <Settings size={14} />
+                                    <Settings size={11} />
                                 </button>
                                 <button
                                     onClick={(e) => handleClearSession(e, session.id)}
-                                    className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
+                                    className="p-1 rounded hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
                                     title="Clear Chat History"
                                 >
-                                    <Eraser size={14} />
+                                    <Eraser size={11} />
                                 </button>
                                 <button
                                     onClick={(e) => handleDeleteSession(e, session.id)}
-                                    className={`p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors ${sessions.length === 1 ? 'hidden' : ''
+                                    className={`p-1 rounded hover:bg-red-500/10 hover:text-red-400 transition-colors ${sessions.length === 1 ? 'hidden' : ''
                                         }`}
                                     title="Delete Chat"
                                 >
-                                    <Trash2 size={14} />
+                                    <Trash2 size={11} />
                                 </button>
                             </div>
                         </div>

@@ -8,6 +8,12 @@
   }
 }
 
+/* Session title marquee scroll */
+@keyframes marquee-session {
+  0%, 15%   { transform: translateX(0); }
+  85%, 100% { transform: translateX(var(--marquee-dist, 0px)); }
+}
+
 /* Custom scrollbar for webkit (Chrome, Safari, Edge) */
 ::-webkit-scrollbar {
   width: 8px;
