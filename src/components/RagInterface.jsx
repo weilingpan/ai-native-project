@@ -143,9 +143,10 @@ const RagInterface = () => {
                 const items = Array.isArray(data) ? data : (data.messages || []);
                 const sorted = [...items]
                     .sort((a, b) => (a.message_order || 0) - (b.message_order || 0))
-                    .map(({ created_at, ...item }) => ({
+                    .map(({ created_at, metadata, ...item }) => ({
                         ...item,
                         timestamp: created_at || new Date().toISOString(),
+                        sources: metadata?.sources || [],
                     }));
                 setSessions(prev => prev.map(s =>
                     s.id === activeSessionId ? { ...s, messages: sorted } : s
@@ -396,6 +397,7 @@ const RagInterface = () => {
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
             let accumulated = '';
+            let sources = [];
 
             while (true) {
                 const { done, value } = await reader.read();
@@ -424,6 +426,8 @@ const RagInterface = () => {
                                     }
                                     : s
                             ));
+                        } else if (parsed.sources !== undefined) {
+                            sources = parsed.sources;
                         }
                     } catch { /* skip malformed lines */ }
                 }
@@ -434,7 +438,7 @@ const RagInterface = () => {
                     ? {
                         ...s, messages: s.messages.map(m =>
                             m.id === botMsgId
-                                ? { ...m, isStreaming: false }
+                                ? { ...m, sources, isStreaming: false }
                                 : m
                         )
                     }
