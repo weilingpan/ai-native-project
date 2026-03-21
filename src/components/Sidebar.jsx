@@ -10,7 +10,8 @@ import {
     User,
     LogOut,
     X,
-    Bot
+    Bot,
+    Database
 } from 'lucide-react';
 import classNames from 'classnames';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -65,6 +66,7 @@ const Sidebar = () => {
         { id: 'home', icon: Home, label: 'Dashboard', path: '/', restricted: true },
         { id: 'chat', icon: MessageSquare, label: 'Chat Session', path: '/chat' },
         { id: 'agent', icon: Bot, label: 'Agent Session', path: '/agent' },
+        { id: 'rag', icon: Database, label: 'RAG Session', path: '/rag' },
         { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
         { id: 'settings', icon: Settings, label: 'Settings', path: '/settings', restricted: true },
     ].filter(item => userRole === 'Admin' || !item.restricted);
@@ -74,6 +76,7 @@ const Sidebar = () => {
         if (currentPath === '/') return 'home';
         if (currentPath.startsWith('/chat')) return 'chat';
         if (currentPath.startsWith('/agent')) return 'agent';
+        if (currentPath.startsWith('/rag')) return 'rag';
         const found = navItems.find(item => item.path !== '/' && currentPath.startsWith(item.path));
         return found ? found.id : '';
     };
