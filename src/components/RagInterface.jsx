@@ -128,7 +128,7 @@ const RagInterface = () => {
 
     useEffect(() => {
         if (activeSessionId) {
-            fetchFiles(activeSessionId);
+            fetchFiles();
         }
     }, [activeSessionId]);
 
@@ -185,12 +185,22 @@ const RagInterface = () => {
         }
     };
 
-    const fetchFiles = async (sessionId) => {
+    const fetchFiles = async () => {
         try {
-            const res = await fetch(`/rag_session/${sessionId}/files`, { headers: { accept: 'application/json' } });
+            const owner = localStorage.getItem('username') || 'regina';
+            const res = await fetch(`/documents?collection=documents&owner=${owner}`, {
+                headers: { accept: 'application/json' },
+            });
             if (!res.ok) throw new Error();
             const data = await res.json();
-            setFiles(Array.isArray(data) ? data : (data.files || []));
+            // Deduplicate by filename — API returns one entry per chunk
+            const seen = new Set();
+            const unique = (Array.isArray(data) ? data : []).filter(d => {
+                if (seen.has(d.filename)) return false;
+                seen.add(d.filename);
+                return true;
+            });
+            setFiles(unique.map(d => ({ id: d.doc_id, name: d.filename, status: 'ready' })));
         } catch {
             setFiles([]);
         }
@@ -385,7 +395,7 @@ const RagInterface = () => {
         if (!allowed.some(ext => file.name.toLowerCase().endsWith(ext))) return;
 
         const tempId = `f-${Date.now()}-${Math.random()}`;
-        setFiles(prev => [...prev, { id: tempId, name: file.name, size: file.size, status: 'uploading', progress: 0 }]);
+        setFiles(prev => [...prev, { id: tempId, name: file.name, status: 'uploading', progress: 0 }]);
 
         const progressInterval = setInterval(() => {
             setFiles(prev => prev.map(f =>
@@ -394,36 +404,25 @@ const RagInterface = () => {
         }, 150);
 
         try {
+            const owner = localStorage.getItem('username') || 'regina';
             const formData = new FormData();
             formData.append('file', file);
-            const res = await fetch(`/rag_session/${activeSessionId}/files`, {
+            formData.append('collection', 'documents');
+            formData.append('owner', owner);
+            formData.append('chunk_size', '500');
+            formData.append('chunk_overlap', '50');
+
+            const res = await fetch('/documents/upload', {
                 method: 'POST',
+                headers: { accept: 'application/json' },
                 body: formData,
             });
             clearInterval(progressInterval);
             if (!res.ok) throw new Error();
-            const data = await res.json();
+            // Upload is synchronous — file is indexed immediately
             setFiles(prev => prev.map(f =>
-                f.id === tempId
-                    ? { id: data.id, name: data.name || file.name, size: data.size || file.size, status: 'indexing', progress: 100 }
-                    : f
+                f.id === tempId ? { ...f, id: file.name, status: 'ready', progress: 100 } : f
             ));
-            // Poll for indexing completion
-            const pollId = data.id;
-            const poll = setInterval(async () => {
-                try {
-                    const statusRes = await fetch(`/rag_session/${activeSessionId}/files/${pollId}`);
-                    if (!statusRes.ok) { clearInterval(poll); return; }
-                    const statusData = await statusRes.json();
-                    if (statusData.status === 'ready') {
-                        setFiles(prev => prev.map(f => f.id === pollId ? { ...f, status: 'ready' } : f));
-                        clearInterval(poll);
-                    } else if (statusData.status === 'error') {
-                        setFiles(prev => prev.map(f => f.id === pollId ? { ...f, status: 'error' } : f));
-                        clearInterval(poll);
-                    }
-                } catch { clearInterval(poll); }
-            }, 2000);
         } catch {
             clearInterval(progressInterval);
             setFiles(prev => prev.map(f =>
@@ -432,11 +431,7 @@ const RagInterface = () => {
         }
     }, [activeSessionId]);
 
-    const handleDeleteFile = async (fileId) => {
-        if (!activeSessionId) return;
-        try {
-            await fetch(`/rag_session/${activeSessionId}/files/${fileId}`, { method: 'DELETE' });
-        } catch { /* ignore */ }
+    const handleDeleteFile = (fileId) => {
         setFiles(prev => prev.filter(f => f.id !== fileId));
     };
 
