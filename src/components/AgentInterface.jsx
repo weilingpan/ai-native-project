@@ -531,6 +531,14 @@ const AgentInterface = () => {
                 return updated;
             });
 
+            if (botText.trim()) {
+                fetch(`/chat_session/${activeSessionId}/history`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_content: text, ai_content: botText })
+                }).catch(e => console.error('Failed to save agent history:', e));
+            }
+
         } catch (err) {
             if (err.name === 'AbortError') {
                 setSessions(prev => {
