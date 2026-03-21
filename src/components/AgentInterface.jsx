@@ -268,8 +268,9 @@ const AgentInterface = () => {
                 const items = Array.isArray(data) ? data : (data.messages || []);
                 const sorted = [...items]
                     .sort((a, b) => (a.message_order || 0) - (b.message_order || 0))
-                    .map(({ used_tools, ...item }) => ({
+                    .map(({ used_tools, created_at, ...item }) => ({
                         ...item,
+                        timestamp: created_at || new Date().toISOString(),
                         toolCalls: item.role === 'assistant'
                             ? (used_tools || []).map(name => ({ name, args: null, result: null }))
                             : [],
