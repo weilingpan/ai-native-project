@@ -200,8 +200,8 @@ const AgentInterface = () => {
             setLoadingTools(true);
             const username = localStorage.getItem('username') || '';
             const [sysRes, ownerRes] = await Promise.all([
-                fetch('/agent/tools'),
-                username ? fetch(`/agent/tools?owner=${username}`) : Promise.resolve(null),
+                fetch('/agent/tools?owner=system'),
+                (username && username !== 'system') ? fetch(`/agent/tools?owner=${username}`) : Promise.resolve(null),
             ]);
 
             if (!sysRes.ok) throw new Error('Failed to fetch system tools');
@@ -210,7 +210,6 @@ const AgentInterface = () => {
 
             if (ownerRes && ownerRes.ok) {
                 const ownerData = await ownerRes.json();
-                // Exclude any that are already system-owned (owner === 'system')
                 const ownerList = Array.isArray(ownerData) ? ownerData : (ownerData.tools || []);
                 setOwnerTools(ownerList.filter(t => t.owner !== 'system'));
             } else {
