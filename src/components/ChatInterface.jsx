@@ -200,7 +200,7 @@ const ChatInterface = () => {
                     messages: s.messages || [],
                     timestamp: s.created_at || s.timestamp || new Date(),
                     model: s.model_name || s.model || 'gpt-5-nano',
-                    type: s.session_type || s.type || 'text'
+                    type: (s.session_type === 'voice' ? 'audio' : s.session_type) || s.type || 'text'
                 }));
 
                 const sortedSessions = formattedSessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -361,7 +361,7 @@ const ChatInterface = () => {
                 const payload = {
                     owner: username,
                     mode: 'chat',
-                    session_type: selectedType,
+                    session_type: selectedType === 'audio' ? 'voice' : selectedType,
                     title: newSessionTitle || 'New Chat',
                     description: newSessionDescription || 'New conversation started',
                     model_name: selectedModel,
@@ -391,7 +391,7 @@ const ChatInterface = () => {
                     // Map backend 'model_name' to frontend 'model' if necessary, 
                     // though the frontend uses 'model' property in some places
                     model: createdSession.model_name || createdSession.model || selectedModel,
-                    type: createdSession.session_type || selectedType
+                    type: (createdSession.session_type === 'voice' ? 'audio' : createdSession.session_type) || selectedType
                 };
 
                 setSessions(prev => [newSession, ...prev]);
@@ -412,7 +412,7 @@ const ChatInterface = () => {
                     title: newSessionTitle,
                     description: newSessionDescription,
                     model_name: selectedModel,
-                    session_type: selectedType,
+                    session_type: selectedType === 'audio' ? 'voice' : selectedType,
                     metadata: selectedType === 'audio' ? { voice: selectedVoice } : {}
                 };
 
@@ -434,7 +434,7 @@ const ChatInterface = () => {
                             ...s,
                             ...updatedData,
                             model: updatedData.model_name || updatedData.model || selectedModel,
-                            type: updatedData.session_type || selectedType,
+                            type: (updatedData.session_type === 'voice' ? 'audio' : updatedData.session_type) || selectedType,
                             timestamp: updatedData.created_at || s.timestamp
                         }
                         : s
@@ -542,7 +542,7 @@ const ChatInterface = () => {
                     title: editTitleValue || 'Untitled',
                     description: session.description || '',
                     model_name: session.model_name || session.model || 'gpt-5-nano',
-                    session_type: session.session_type || session.type || 'text',
+                    session_type: (session.session_type || session.type || 'text') === 'audio' ? 'voice' : (session.session_type || session.type || 'text'),
                     metadata: session.metadata || (session.type === 'audio' ? { voice: session.voice } : {})
                 };
                 const response = await fetch(`/chat_session/${editingSessionId}`, {
@@ -709,7 +709,7 @@ const ChatInterface = () => {
                         title: generatedTitle,
                         description: activeSession.description || 'New conversation started',
                         model_name: activeSession.model_name || activeSession.model || "gpt-5-nano",
-                        session_type: activeSession.session_type || activeSession.type || "text",
+                        session_type: (activeSession.session_type || activeSession.type || "text") === 'audio' ? 'voice' : (activeSession.session_type || activeSession.type || "text"),
                         metadata: activeSession.metadata || (activeSession.type === 'audio' ? { voice: activeSession.voice } : {})
                     };
                     await fetch(`/chat_session/${activeSessionId}`, {
