@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-    Send, Bot, User, Plus, Trash2, Eraser, ChevronLeft, MoreVertical,
+    Send, Bot, User, Plus, Trash2, Eraser, ChevronLeft, ChevronRight, MoreVertical,
     Copy, Check, Search, Settings, Wrench, Zap,
     Terminal, Play, Square, RefreshCw, Info, Cpu, X, AlertCircle
 } from 'lucide-react';
@@ -103,6 +103,9 @@ const AgentInterface = () => {
     const [ownerTools, setOwnerTools] = useState([]);
     const [loadingTools, setLoadingTools] = useState(true);
     const [showToolsPanel, setShowToolsPanel] = useState(true);
+    const [isSessionListOpen, setIsSessionListOpen] = useState(true);
+    const [hoveredSession, setHoveredSession] = useState(null);
+    const [sessionTitleOverflow, setSessionTitleOverflow] = useState(0);
 
     // Mobile
     const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -114,11 +117,21 @@ const AgentInterface = () => {
     const [editingSessionId, setEditingSessionId] = useState(null);
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
+    const [newSessionModel, setNewSessionModel] = useState('');
     const [newSessionTools, setNewSessionTools] = useState([]);
+    const [availableModels, setAvailableModels] = useState([]);
+    const [loadingModels, setLoadingModels] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [sessionToDelete, setSessionToDelete] = useState(null);
     const [isClearModalOpen, setIsClearModalOpen] = useState(false);
     const [sessionToClear, setSessionToClear] = useState(null);
+
+    // Create Tool modal
+    const [isCreateToolModalOpen, setIsCreateToolModalOpen] = useState(false);
+    const [newToolName, setNewToolName] = useState('');
+    const [newToolDesc, setNewToolDesc] = useState('');
+    const [newToolWebhookUrl, setNewToolWebhookUrl] = useState('');
+    const [isCreatingTool, setIsCreatingTool] = useState(false);
 
     // Header menu
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
@@ -134,6 +147,7 @@ const AgentInterface = () => {
     useEffect(() => {
         fetchTools();
         fetchSessions();
+        fetchModels();
     }, []);
 
     useEffect(() => {
@@ -177,6 +191,25 @@ const AgentInterface = () => {
             setOwnerTools([]);
         } finally {
             setLoadingTools(false);
+        }
+    };
+
+    // ── Fetch Models ──────────────────────────────────────────────────────────
+    const fetchModels = async () => {
+        setLoadingModels(true);
+        try {
+            const res = await fetch('/llm_openai/models');
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            const models = data.models || [];
+            setAvailableModels(models);
+            if (models.length > 0) setNewSessionModel(models[0].name);
+        } catch {
+            const fallback = [{ name: 'gpt-4o' }, { name: 'gpt-4o-mini' }];
+            setAvailableModels(fallback);
+            setNewSessionModel(fallback[0].name);
+        } finally {
+            setLoadingModels(false);
         }
     };
 
@@ -256,6 +289,7 @@ const AgentInterface = () => {
         setEditingSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDesc(session.description || '');
+        setNewSessionModel(session.model_name || session.model || availableModels[0]?.name || '');
         setNewSessionTools(session.tools || []);
         setIsCreateModalOpen(true);
     };
@@ -268,6 +302,7 @@ const AgentInterface = () => {
             session_type: 'text',
             title: newSessionTitle.trim() || 'New Agent Session',
             description: newSessionDesc.trim() || '',
+            model_name: newSessionModel,
             metadata: { tools: newSessionTools }
         };
 
@@ -308,6 +343,7 @@ const AgentInterface = () => {
                             ...s,
                             title: payload.title,
                             description: payload.description,
+                            model_name: payload.model_name,
                             tools: newSessionTools
                         };
                     }
@@ -317,6 +353,7 @@ const AgentInterface = () => {
             setIsCreateModalOpen(false);
             setNewSessionTitle('');
             setNewSessionDesc('');
+            setNewSessionModel(availableModels[0]?.name || '');
             setEditingSessionId(null);
             setModalMode('create');
         } catch (error) {
@@ -354,6 +391,37 @@ const AgentInterface = () => {
 
         setIsClearModalOpen(false);
         setSessionToClear(null);
+    };
+
+    const handleCreateTool = async () => {
+        const name = newToolName.trim();
+        const webhookUrl = newToolWebhookUrl.trim();
+        if (!name || !webhookUrl) return;
+
+        const username = localStorage.getItem('username') || '';
+        setIsCreatingTool(true);
+        try {
+            const response = await fetch('/agent/tools', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name,
+                    owner: username,
+                    description: newToolDesc.trim(),
+                    metadata: { webhook_url: webhookUrl },
+                }),
+            });
+            if (!response.ok) throw new Error('Failed to create tool');
+            setIsCreateToolModalOpen(false);
+            setNewToolName('');
+            setNewToolDesc('');
+            setNewToolWebhookUrl('');
+            fetchTools();
+        } catch (err) {
+            console.error('Error creating tool:', err);
+        } finally {
+            setIsCreatingTool(false);
+        }
     };
 
     const handleSelectSession = (id) => {
@@ -553,7 +621,7 @@ const AgentInterface = () => {
     };
 
     // ── Render ─────────────────────────────────────────────────────────────────
-    const showSessionList = !isMobile || mobileView === 'list';
+    const showSessionList = isMobile ? mobileView === 'list' : isSessionListOpen;
     const showChatArea = !isMobile || mobileView === 'chat';
     const filteredSessions = sessions.filter(s =>
         s.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -563,80 +631,127 @@ const AgentInterface = () => {
         <div className="flex h-full w-full bg-slate-900 text-slate-100 overflow-hidden relative">
 
             {/* ── Left: Session List ──────────────────────────────────────────── */}
-            <div className={`${showSessionList ? 'flex' : 'hidden'} ${isMobile ? 'w-full pt-16' : 'w-64'} bg-slate-900/90 border-r border-slate-700/50 flex-col flex-shrink-0 backdrop-blur-xl`}>
-                <div className="p-4 space-y-3">
-                    <button
-                        id="agent-new-session-btn"
-                        onClick={handleOpenCreateModal}
-                        className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white p-3 rounded-xl transition-all shadow-lg shadow-violet-900/30 group"
+            <AnimatePresence initial={false}>
+                {showSessionList && (
+                    <motion.div
+                        initial={isMobile ? false : { width: 0, opacity: 0 }}
+                        animate={isMobile ? {} : { width: 200, opacity: 1 }}
+                        exit={isMobile ? {} : { width: 0, opacity: 0 }}
+                        transition={{ duration: 0.25, ease: 'easeInOut' }}
+                        className={`${isMobile ? 'w-full pt-16' : ''} bg-slate-900/90 border-r border-slate-700/50 flex flex-col flex-shrink-0 backdrop-blur-xl overflow-hidden`}
                     >
-                        <Plus size={18} className="group-hover:rotate-90 transition-transform duration-300" />
-                        <span className="font-medium text-sm">New Agent Session</span>
-                    </button>
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-                        <input
-                            type="text"
-                            placeholder="Search sessions..."
-                            value={searchQuery}
-                            onChange={e => setSearchQuery(e.target.value)}
-                            className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl py-2 pl-8 pr-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
-                        />
-                    </div>
-                </div>
+                        <div className="p-2.5 space-y-2">
+                            <div className="flex items-center justify-between gap-2">
+                                <button
+                                    id="agent-new-session-btn"
+                                    onClick={handleOpenCreateModal}
+                                    className="flex-1 flex items-center justify-center gap-1.5 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white py-2 px-3 rounded-lg transition-all shadow-md shadow-violet-900/30 group"
+                                >
+                                    <Plus size={14} className="group-hover:rotate-90 transition-transform duration-300 shrink-0" />
+                                    <span className="font-medium text-xs whitespace-nowrap">New Session</span>
+                                </button>
+                                {!isMobile && (
+                                    <button
+                                        onClick={() => setIsSessionListOpen(false)}
+                                        className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors shrink-0"
+                                        title="Collapse session list"
+                                    >
+                                        <ChevronLeft size={14} />
+                                    </button>
+                                )}
+                            </div>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" size={12} />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    className="w-full bg-slate-800/50 border border-slate-700/50 rounded-lg py-1.5 pl-7 pr-2.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all"
+                                />
+                            </div>
+                        </div>
 
-                <div className="flex-1 overflow-y-auto px-2 space-y-1 custom-scrollbar pb-4">
-                    {filteredSessions.length === 0 && (
-                        <div className="flex flex-col items-center justify-center py-12 text-slate-600 gap-3">
-                            <Bot size={32} className="opacity-40" />
-                            <p className="text-xs text-center">No sessions yet.<br />Create one to get started.</p>
-                        </div>
-                    )}
-                    {filteredSessions.map(session => (
-                        <div
-                            key={session.id}
-                            onClick={() => handleSelectSession(session.id)}
-                            className={`group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${activeSessionId === session.id
-                                ? 'bg-violet-900/30 border-violet-700/50 text-white shadow-md'
-                                : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
-                                }`}
-                        >
-                            <div className="flex items-center gap-2.5 overflow-hidden flex-1">
-                                <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${activeSessionId === session.id ? 'bg-violet-500/20' : 'bg-slate-800'}`}>
-                                    <Zap size={14} className={activeSessionId === session.id ? 'text-violet-400' : 'text-slate-600'} />
+                        <div className="flex-1 overflow-y-auto px-1.5 space-y-0.5 custom-scrollbar pb-3">
+                            {filteredSessions.length === 0 && (
+                                <div className="flex flex-col items-center justify-center py-10 text-slate-600 gap-2">
+                                    <Bot size={24} className="opacity-40" />
+                                    <p className="text-[11px] text-center">No sessions yet.</p>
                                 </div>
-                                <span className="truncate text-sm font-medium">{session.title}</span>
-                            </div>
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                    onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
-                                    className="p-1.5 rounded-md hover:bg-violet-500/10 hover:text-violet-400 transition-colors"
-                                    title="Edit Session"
-                                ><Settings size={12} /></button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); setSessionToClear(session.id); setIsClearModalOpen(true); }}
-                                    className="p-1.5 rounded-md hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
-                                    title="Clear History"
-                                ><Eraser size={12} /></button>
-                                <button
-                                    onClick={e => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteModalOpen(true); }}
-                                    className="p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-colors"
-                                    title="Delete Session"
-                                ><Trash2 size={12} /></button>
-                            </div>
+                            )}
+                            {filteredSessions.map(session => (
+                                <div
+                                    key={session.id}
+                                    onClick={() => handleSelectSession(session.id)}
+                                    onMouseEnter={e => {
+                                        const span = e.currentTarget.querySelector('[data-title-span]');
+                                        if (span) setSessionTitleOverflow(Math.max(0, span.scrollWidth - span.offsetWidth));
+                                        setHoveredSession(session.id);
+                                    }}
+                                    onMouseLeave={() => { setHoveredSession(null); setSessionTitleOverflow(0); }}
+                                    className={`group flex items-center justify-between px-2 py-1.5 rounded-lg cursor-pointer transition-all border ${activeSessionId === session.id
+                                        ? 'bg-violet-900/30 border-violet-700/50 text-white'
+                                        : 'border-transparent text-slate-400 hover:bg-slate-800/50 hover:text-slate-200'
+                                        }`}
+                                >
+                                    <div className="flex items-center gap-2 overflow-hidden flex-1">
+                                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 ${activeSessionId === session.id ? 'bg-violet-500/20' : 'bg-slate-800'}`}>
+                                            <Zap size={11} className={activeSessionId === session.id ? 'text-violet-400' : 'text-slate-600'} />
+                                        </div>
+                                        <span
+                                            data-title-span
+                                            className="text-xs font-medium whitespace-nowrap"
+                                            style={hoveredSession === session.id && sessionTitleOverflow > 0 ? {
+                                                display: 'inline-block',
+                                                animation: `marquee-session ${Math.max(1.5, sessionTitleOverflow / 40)}s ease-in-out infinite alternate`,
+                                                '--marquee-dist': `-${sessionTitleOverflow}px`,
+                                            } : {
+                                                overflow: 'hidden',
+                                                textOverflow: 'ellipsis',
+                                                display: 'block',
+                                            }}
+                                        >{session.title}</span>
+                                    </div>
+                                    <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                        <button
+                                            onClick={e => { e.stopPropagation(); handleOpenEditModal(session); }}
+                                            className="p-1 rounded hover:bg-violet-500/10 hover:text-violet-400 transition-colors"
+                                            title="Edit"
+                                        ><Settings size={11} /></button>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setSessionToClear(session.id); setIsClearModalOpen(true); }}
+                                            className="p-1 rounded hover:bg-yellow-500/10 hover:text-yellow-400 transition-colors"
+                                            title="Clear"
+                                        ><Eraser size={11} /></button>
+                                        <button
+                                            onClick={e => { e.stopPropagation(); setSessionToDelete(session.id); setIsDeleteModalOpen(true); }}
+                                            className="p-1 rounded hover:bg-red-500/10 hover:text-red-400 transition-colors"
+                                            title="Delete"
+                                        ><Trash2 size={11} /></button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                    ))}
-                </div>
-            </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* ── Middle: Chat Area ───────────────────────────────────────────── */}
             <div className={`${showChatArea ? 'flex' : 'hidden'} flex-1 flex-col h-full relative overflow-hidden`}>
                 {/* Header */}
                 <div className={`h-16 border-b border-slate-700/50 flex items-center justify-between px-4 md:px-6 bg-slate-900/80 backdrop-blur-md sticky top-0 z-10 ${isMobile ? 'pl-16' : ''}`}>
                     <div className="flex items-center gap-3">
-                        {isMobile && (
+                        {isMobile ? (
                             <button onClick={() => setMobileView('list')} className="p-1 hover:bg-slate-800 rounded-lg text-slate-400">
                                 <ChevronLeft size={22} />
+                            </button>
+                        ) : !isSessionListOpen && (
+                            <button
+                                onClick={() => setIsSessionListOpen(true)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-violet-400 hover:bg-slate-800 transition-colors"
+                                title="Open session list"
+                            >
+                                <ChevronRight size={15} />
                             </button>
                         )}
                         <div className="w-9 h-9 rounded-full bg-violet-500/20 flex items-center justify-center">
@@ -673,21 +788,15 @@ const AgentInterface = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {/* Tools Panel Toggle */}
-                        {!isMobile && (
+                        {!isMobile && !showToolsPanel && (
                             <button
-                                onClick={() => setShowToolsPanel(v => !v)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${showToolsPanel
-                                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-                                    : 'bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700/50'
-                                    }`}
-                                title="Toggle tools panel"
+                                onClick={() => setShowToolsPanel(true)}
+                                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+                                title="Open tool store"
                             >
-                                <Wrench size={13} />
-                                Tools
+                                <ChevronLeft size={15} />
                             </button>
                         )}
-
                         {/* Header Menu */}
                         <div className="relative">
                             <button
@@ -727,11 +836,6 @@ const AgentInterface = () => {
                                                     onClick={() => { if (activeSession) { setSessionToClear(activeSession.id); setIsClearModalOpen(true); } setIsHeaderMenuOpen(false); }}
                                                     className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
                                                 ><Eraser size={15} />Clear History</button>
-                                                <div className="h-px bg-slate-700/50 mx-2" />
-                                                <button
-                                                    onClick={() => { fetchTools(); setIsHeaderMenuOpen(false); }}
-                                                    className="w-full text-left px-4 py-3 text-sm text-slate-200 hover:bg-slate-700/50 flex items-center gap-2"
-                                                ><RefreshCw size={15} />Refresh Tools</button>
                                             </motion.div>
                                         </>
                                     )}
@@ -904,13 +1008,22 @@ const AgentInterface = () => {
                                     {systemTools.length + ownerTools.length}
                                 </span>
                             </div>
-                            <button
-                                onClick={fetchTools}
-                                className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                                title="Refresh tools"
-                            >
-                                <RefreshCw size={13} className={loadingTools ? 'animate-spin' : ''} />
-                            </button>
+                            <div className="flex items-center gap-1">
+                                <button
+                                    onClick={fetchTools}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
+                                    title="Refresh tools"
+                                >
+                                    <RefreshCw size={13} className={loadingTools ? 'animate-spin' : ''} />
+                                </button>
+                                <button
+                                    onClick={() => setShowToolsPanel(false)}
+                                    className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors"
+                                    title="Collapse tool store"
+                                >
+                                    <ChevronRight size={14} />
+                                </button>
+                            </div>
                         </div>
 
                         <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar">
@@ -967,15 +1080,13 @@ const AgentInterface = () => {
                             )}
                         </div>
 
-                        {/* Future: Create Tool Button */}
                         <div className="p-3 border-t border-slate-700/50">
                             <button
-                                disabled
-                                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-slate-700/50 text-slate-600 text-xs cursor-not-allowed hover:border-slate-600 transition-colors"
-                                title="Coming soon"
+                                onClick={() => setIsCreateToolModalOpen(true)}
+                                className="w-full flex items-center justify-center gap-2 p-2.5 rounded-xl border border-dashed border-violet-500/30 text-violet-400 text-xs hover:bg-violet-500/10 hover:border-violet-500/50 transition-colors"
                             >
                                 <Plus size={13} />
-                                Create Tool <span className="text-[10px] text-slate-700">(coming soon)</span>
+                                Create Tool
                             </button>
                         </div>
                     </motion.div>
@@ -1035,27 +1146,75 @@ const AgentInterface = () => {
                                         />
                                     </div>
                                     <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">LLM Model</label>
+                                        {loadingModels ? (
+                                            <div className="flex items-center gap-2 text-xs text-slate-500 py-2.5">
+                                                <RefreshCw size={12} className="animate-spin" />
+                                                Loading models...
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={newSessionModel}
+                                                onChange={e => setNewSessionModel(e.target.value)}
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-violet-500/50 transition-all appearance-none cursor-pointer"
+                                            >
+                                                {availableModels.map(m => (
+                                                    <option key={m.name} value={m.name}>{m.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                    <div>
                                         <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool store</label>
-                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-40 custom-scrollbar p-1">
-                                            {[...systemTools, ...ownerTools].length === 0 ? (
+                                        <div className="bg-slate-800/40 border border-slate-700/30 rounded-xl overflow-y-auto max-h-48 custom-scrollbar p-1">
+                                            {systemTools.length === 0 && ownerTools.length === 0 ? (
                                                 <div className="p-3 text-center text-[11px] text-slate-500">No tools found.</div>
-                                            ) : [...systemTools, ...ownerTools].map(t => {
-                                                const isSelected = newSessionTools.includes(t.name);
-                                                return (
-                                                    <div
-                                                        key={t.name}
-                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(name => name !== t.name) : [...prev, t.name])}
-                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
-                                                    >
-                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
-                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="text-xs font-medium text-slate-300 font-mono truncate">{t.name}</p>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
+                                            ) : (
+                                                <>
+                                                    {systemTools.length > 0 && (
+                                                        <>
+                                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 pt-1.5 pb-1">System</p>
+                                                            {systemTools.map(t => {
+                                                                const isSelected = newSessionTools.includes(t.name);
+                                                                return (
+                                                                    <div
+                                                                        key={t.name}
+                                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(n => n !== t.name) : [...prev, t.name])}
+                                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                                    >
+                                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
+                                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                                        </div>
+                                                                        <p className="text-xs font-medium text-slate-300 font-mono truncate flex-1 min-w-0">{t.name}</p>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </>
+                                                    )}
+                                                    {ownerTools.length > 0 && (
+                                                        <>
+                                                            <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-2 pt-2 pb-1">
+                                                                {localStorage.getItem('username') || 'User'}
+                                                            </p>
+                                                            {ownerTools.map(t => {
+                                                                const isSelected = newSessionTools.includes(t.name);
+                                                                return (
+                                                                    <div
+                                                                        key={t.name}
+                                                                        onClick={() => setNewSessionTools(prev => prev.includes(t.name) ? prev.filter(n => n !== t.name) : [...prev, t.name])}
+                                                                        className={`flex items-center gap-3 p-2 hover:bg-slate-800/60 rounded-lg cursor-pointer transition-colors group select-none ${isSelected ? 'bg-slate-800/30' : ''}`}
+                                                                    >
+                                                                        <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border transition-all ${isSelected ? 'bg-violet-500 border-violet-500' : 'border-slate-600 group-hover:border-violet-400'}`}>
+                                                                            {isSelected && <Check size={12} className="text-white" strokeWidth={3} />}
+                                                                        </div>
+                                                                        <p className="text-xs font-medium text-slate-300 font-mono truncate flex-1 min-w-0">{t.name}</p>
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                        </>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                         <p className="text-[10px] text-slate-500 mt-2 px-1 text-right">
                                             {newSessionTools.length} tool{newSessionTools.length !== 1 ? 's' : ''} selected
@@ -1146,6 +1305,85 @@ const AgentInterface = () => {
                                 <div className="flex gap-3">
                                     <button onClick={() => setIsClearModalOpen(false)} className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 text-sm font-medium transition-all">Cancel</button>
                                     <button onClick={handleClearSession} className="flex-1 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white text-sm font-medium transition-all">Clear</button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
+            {/* ── Create Tool Modal ────────────────────────────────────────────── */}
+            {createPortal(
+                <AnimatePresence>
+                    {isCreateToolModalOpen && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4"
+                            onClick={() => setIsCreateToolModalOpen(false)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 16 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 16 }}
+                                onClick={e => e.stopPropagation()}
+                                className="w-full max-w-md bg-slate-900 border border-slate-700/50 rounded-2xl shadow-2xl"
+                            >
+                                <div className="flex items-center justify-between p-6 border-b border-slate-700/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-9 h-9 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                            <Wrench size={18} className="text-emerald-400" />
+                                        </div>
+                                        <h3 className="text-base font-semibold text-slate-100">Create Tool</h3>
+                                    </div>
+                                    <button onClick={() => setIsCreateToolModalOpen(false)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-800 transition-colors">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool Name <span className="text-red-400">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={newToolName}
+                                            onChange={e => setNewToolName(e.target.value)}
+                                            placeholder="e.g. my_current_time"
+                                            autoFocus
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description <span className="text-slate-600">(optional)</span></label>
+                                        <input
+                                            type="text"
+                                            value={newToolDesc}
+                                            onChange={e => setNewToolDesc(e.target.value)}
+                                            placeholder="What does this tool do?"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Webhook URL <span className="text-red-400">*</span></label>
+                                        <input
+                                            type="url"
+                                            value={newToolWebhookUrl}
+                                            onChange={e => setNewToolWebhookUrl(e.target.value)}
+                                            placeholder="https://your-server/tools/endpoint"
+                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex gap-3 p-6 pt-0">
+                                    <button
+                                        onClick={() => setIsCreateToolModalOpen(false)}
+                                        className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 text-sm font-medium transition-all"
+                                    >Cancel</button>
+                                    <button
+                                        onClick={handleCreateTool}
+                                        disabled={!newToolName.trim() || !newToolWebhookUrl.trim() || isCreatingTool}
+                                        className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all shadow-lg shadow-emerald-900/30"
+                                    >
+                                        {isCreatingTool ? 'Creating…' : 'Create Tool'}
+                                    </button>
                                 </div>
                             </motion.div>
                         </motion.div>

@@ -2,6 +2,7 @@ import React from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import AgentInterface from './components/AgentInterface';
+import RagInterface from './components/RagInterface';
 import Dashboard from './components/Dashboard';
 import ComingSoon from './components/ComingSoon';
 import Login from './components/Login';
@@ -63,6 +64,21 @@ function App() {
                                 <RequireAuth>
                                     <PageWrapper>
                                         <AgentInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
+
+                            <Route path="/rag" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <RagInterface />
+                                    </PageWrapper>
+                                </RequireAuth>
+                            } />
+                            <Route path="/rag/:session_id" element={
+                                <RequireAuth>
+                                    <PageWrapper>
+                                        <RagInterface />
                                     </PageWrapper>
                                 </RequireAuth>
                             } />

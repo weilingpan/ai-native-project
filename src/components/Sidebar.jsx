@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -10,7 +10,8 @@ import {
     User,
     LogOut,
     X,
-    Bot
+    Bot,
+    Database
 } from 'lucide-react';
 import classNames from 'classnames';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -20,6 +21,8 @@ const Sidebar = () => {
     const [isOpen, setIsOpen] = useState(!isMobile); // Default closed on mobile, open on desktop
     const [hoveredItem, setHoveredItem] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
+    const [openWidth, setOpenWidth] = useState(180);
+    const measureRef = useRef(null);
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -63,6 +66,7 @@ const Sidebar = () => {
         { id: 'home', icon: Home, label: 'Dashboard', path: '/', restricted: true },
         { id: 'chat', icon: MessageSquare, label: 'Chat Session', path: '/chat' },
         { id: 'agent', icon: Bot, label: 'Agent Session', path: '/agent' },
+        { id: 'rag', icon: Database, label: 'RAG Session', path: '/rag' },
         { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
         { id: 'settings', icon: Settings, label: 'Settings', path: '/settings', restricted: true },
     ].filter(item => userRole === 'Admin' || !item.restricted);
@@ -72,6 +76,7 @@ const Sidebar = () => {
         if (currentPath === '/') return 'home';
         if (currentPath.startsWith('/chat')) return 'chat';
         if (currentPath.startsWith('/agent')) return 'agent';
+        if (currentPath.startsWith('/rag')) return 'rag';
         const found = navItems.find(item => item.path !== '/' && currentPath.startsWith(item.path));
         return found ? found.id : '';
     };
@@ -105,11 +110,41 @@ const Sidebar = () => {
 
 
 
-    // Sidebar Width Logic
-    const sidebarWidth = isOpen ? 280 : (isMobile ? 0 : 80);
+    // Measure natural content width from hidden portal element
+    useLayoutEffect(() => {
+        if (measureRef.current) {
+            setOpenWidth(measureRef.current.offsetWidth);
+        }
+    }, [userRole]);
+
+    // Sidebar Width Logic — dynamic based on content
+    const sidebarWidth = isOpen ? openWidth : (isMobile ? 0 : 56);
 
     return (
         <>
+            {/* Hidden measurement element — renders nav at natural width to compute openWidth */}
+            {createPortal(
+                <div
+                    ref={measureRef}
+                    className="fixed opacity-0 pointer-events-none"
+                    style={{ left: '-9999px', top: '-9999px' }}
+                >
+                    <div className="px-2">
+                        {navItems.map(item => (
+                            <div key={item.id} className="flex items-center gap-3 px-2 py-2">
+                                <item.icon size={18} className="shrink-0" />
+                                <span className="text-sm font-medium whitespace-nowrap">{item.label}</span>
+                            </div>
+                        ))}
+                        <div className="flex items-center gap-3 px-2 py-2.5">
+                            <ChevronLeft size={18} className="shrink-0" />
+                            <span className="text-sm font-medium whitespace-nowrap">Collapse Sidebar</span>
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
+
             {/* Mobile Backdrop */}
             <AnimatePresence>
                 {isMobile && isOpen && (
@@ -154,18 +189,18 @@ const Sidebar = () => {
                 )}
             >
                 <div className={classNames(
-                    "h-20 border-b border-slate-700/50 overflow-hidden flex items-center transition-all",
+                    "h-14 border-b border-slate-700/50 overflow-hidden flex items-center transition-all",
                     {
-                        'p-4 justify-between': isOpen || isMobile,
+                        'px-3 justify-between': isOpen || isMobile,
                         'justify-center': !isOpen && !isMobile
                     }
                 )}>
                     <motion.div
-                        className="font-bold text-xl text-white tracking-wide flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
+                        className="font-bold text-base text-white tracking-wide flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity"
                         onClick={() => handleNavigation('/')}
                     >
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
-                            <span className="text-lg font-bold">A</span>
+                        <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-blue-500 to-purple-600 flex items-center justify-center shrink-0">
+                            <span className="text-sm font-bold">A</span>
                         </div>
                         <AnimatePresence>
                             {isOpen && (
@@ -175,7 +210,7 @@ const Sidebar = () => {
                                     exit={{ opacity: 0, width: 0 }}
                                     className="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400 whitespace-nowrap overflow-hidden flex items-center"
                                 >
-                                    Reg<span className="text-cyan-400 font-mono text-2xl font-bold mx-0.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">I</span>na
+                                    Reg<span className="text-cyan-400 font-mono text-xl font-bold mx-0.5 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]">I</span>na
                                 </motion.span>
                             )}
                         </AnimatePresence>
@@ -193,7 +228,7 @@ const Sidebar = () => {
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 px-3 py-4 space-y-2 overflow-y-auto overflow-x-hidden">
+                <nav className="flex-1 px-2 py-3 space-y-1 overflow-y-auto overflow-x-hidden">
                     {navItems.map((item) => (
                         <div
                             key={item.id}
@@ -201,7 +236,7 @@ const Sidebar = () => {
                             onMouseEnter={(e) => handleItemHover(e, item.id)}
                             onMouseLeave={() => setHoveredItem(null)}
                             className={classNames(
-                                "flex items-center gap-4 p-3 rounded-xl cursor-pointer transition-all duration-200 group relative",
+                                "flex items-center gap-3 px-2 py-2 rounded-lg cursor-pointer transition-all duration-200 group relative",
                                 {
                                     'bg-slate-700/50 text-blue-400': activeItem === item.id,
                                     'text-slate-400 hover:bg-slate-800/50 hover:text-slate-200': activeItem !== item.id,
@@ -210,7 +245,7 @@ const Sidebar = () => {
                             )}
                         >
                             <item.icon
-                                size={24}
+                                size={18}
                                 className={classNames(
                                     "transition-colors shrink-0",
                                     { 'text-blue-500': activeItem === item.id }
@@ -223,7 +258,7 @@ const Sidebar = () => {
                                         initial={{ opacity: 0, width: 0 }}
                                         animate={{ opacity: 1, width: "auto" }}
                                         exit={{ opacity: 0, width: 0 }}
-                                        className="font-medium whitespace-nowrap overflow-hidden"
+                                        className="text-sm font-medium whitespace-nowrap overflow-hidden"
                                     >
                                         {item.label}
                                     </motion.span>
@@ -263,12 +298,12 @@ const Sidebar = () => {
                         <button
                             onClick={toggleSidebar}
                             className={classNames(
-                                "w-full p-4 flex items-center gap-4 text-slate-400 hover:bg-slate-800/50 hover:text-white transition-colors",
+                                "w-full px-2 py-2.5 flex items-center gap-3 text-slate-400 hover:bg-slate-800/50 hover:text-white transition-colors",
                                 { 'justify-center': !isOpen }
                             )}
                         >
                             <div className={classNames("shrink-0 transition-transform duration-300", { "rotate-180": !isOpen })}>
-                                <ChevronLeft size={24} />
+                                <ChevronLeft size={18} />
                             </div>
                             <AnimatePresence>
                                 {isOpen && (
@@ -276,7 +311,7 @@ const Sidebar = () => {
                                         initial={{ opacity: 0, width: 0 }}
                                         animate={{ opacity: 1, width: "auto" }}
                                         exit={{ opacity: 0, width: 0 }}
-                                        className="font-medium whitespace-nowrap overflow-hidden"
+                                        className="text-sm font-medium whitespace-nowrap overflow-hidden"
                                     >
                                         Collapse Sidebar
                                     </motion.span>
@@ -288,33 +323,32 @@ const Sidebar = () => {
                     {/* User Profile */}
                     <div className={classNames(
                         "transition-all duration-300",
-                        { 'p-4 pt-2': isOpen || isMobile, 'p-2': !isOpen && !isMobile }
+                        { 'px-2 py-2': isOpen || isMobile, 'p-1.5': !isOpen && !isMobile }
                     )}>
                         <button
                             onClick={handleLogout}
                             className={classNames(
-                                "w-full flex items-center gap-3 p-2 rounded-xl hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all cursor-pointer group text-left",
+                                "w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-red-500/10 hover:border-red-500/20 border border-transparent transition-all cursor-pointer group text-left",
                                 { 'justify-center': !isOpen && !isMobile }
                             )}
                             title="Sign Out"
                         >
-                            <div className="relative">
+                            <div className="relative shrink-0">
                                 <img
                                     src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`}
                                     alt="User"
-                                    className="w-10 h-10 rounded-full bg-slate-600 border-2 border-slate-500 shrink-0 group-hover:border-red-400 transition-colors"
+                                    className="w-8 h-8 rounded-full bg-slate-600 border-2 border-slate-500 group-hover:border-red-400 transition-colors"
                                 />
-                                {/* Status Indicator */}
-                                <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-slate-800 rounded-full"></div>
+                                <div className="absolute bottom-0 right-0 w-2 h-2 bg-green-500 border-2 border-slate-800 rounded-full"></div>
                             </div>
 
                             {isOpen && (
                                 <>
                                     <div className="flex flex-col overflow-hidden flex-1">
-                                        <span className="text-sm font-semibold text-slate-200 truncate group-hover:text-red-200 transition-colors">{username}</span>
-                                        <span className="text-xs text-slate-500 truncate group-hover:text-red-300/70 transition-colors">{userRole}</span>
+                                        <span className="text-xs font-semibold text-slate-200 truncate group-hover:text-red-200 transition-colors">{username}</span>
+                                        <span className="text-[11px] text-slate-500 truncate group-hover:text-red-300/70 transition-colors">{userRole}</span>
                                     </div>
-                                    <LogOut size={18} className="text-slate-500 group-hover:text-red-400 transition-colors" />
+                                    <LogOut size={14} className="text-slate-500 group-hover:text-red-400 transition-colors" />
                                 </>
                             )}
                         </button>
