@@ -136,6 +136,7 @@ const ChatInterface = () => {
     const [selectedType, setSelectedType] = useState('text'); // 'text' | 'image'
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDescription, setNewSessionDescription] = useState('');
+    const [newSessionMemory, setNewSessionMemory] = useState(0);
     const [hoveredSessionId, setHoveredSessionId] = useState(null);
     const [tooltipPos, setTooltipPos] = useState({ top: 0, left: 0 });
 
@@ -338,6 +339,7 @@ const ChatInterface = () => {
         setModalMode('create');
         setNewSessionTitle('');
         setNewSessionDescription('');
+        setNewSessionMemory(0);
         setSelectedType('text');
         setSelectedModel('gpt-5-nano');
         setIsModelModalOpen(true);
@@ -349,6 +351,7 @@ const ChatInterface = () => {
         setTargetSessionId(session.id);
         setNewSessionTitle(session.title);
         setNewSessionDescription(session.description);
+        setNewSessionMemory(session.memory_window ?? 0);
         setSelectedType(session.type || 'text');
         setSelectedModel(session.model || 'gpt-5-nano');
         setIsModelModalOpen(true);
@@ -365,6 +368,7 @@ const ChatInterface = () => {
                     title: newSessionTitle || 'New Chat',
                     description: newSessionDescription || 'New conversation started',
                     model_name: selectedModel,
+                    memory_window: Number(newSessionMemory),
                     metadata: selectedType === 'audio' ? { voice: selectedVoice } : {}
                 };
 
@@ -412,6 +416,7 @@ const ChatInterface = () => {
                     title: newSessionTitle,
                     description: newSessionDescription,
                     model_name: selectedModel,
+                    memory_window: Number(newSessionMemory),
                     session_type: selectedType === 'audio' ? 'voice' : selectedType,
                     metadata: selectedType === 'audio' ? { voice: selectedVoice } : {}
                 };
@@ -434,6 +439,7 @@ const ChatInterface = () => {
                             ...s,
                             ...updatedData,
                             model: updatedData.model_name || updatedData.model || selectedModel,
+                            memory_window: updatedData.memory_window,
                             type: (updatedData.session_type === 'voice' ? 'audio' : updatedData.session_type) || selectedType,
                             timestamp: updatedData.created_at || s.timestamp
                         }
@@ -885,7 +891,8 @@ const ChatInterface = () => {
                 body: JSON.stringify({
                     human_message: currentInput,
                     model: activeSession?.model || "gpt-5-nano",
-                    stream: true
+                    stream: true,
+                    chat_session_id: activeSessionId
                 }),
                 signal: controller.signal
             });
@@ -921,13 +928,8 @@ const ChatInterface = () => {
                     }));
                     try {
                         await syncTitleIfNeeded();
-                        await fetch(`/chat_session/${activeSessionId}/history`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ user_content: currentInput, ai_content: botText })
-                        });
                     } catch (e) {
-                        console.error('Failed to save history:', e);
+                        console.error('Failed to sync title:', e);
                     }
                     break;
                 }
@@ -1550,6 +1552,25 @@ const ChatInterface = () => {
                                         placeholder="e.g. Python Script Debugging"
                                         className="w-full bg-slate-800/50 border border-slate-700/50 rounded-xl px-4 py-3 text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all"
                                     />
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center">
+                                        <label className="text-sm font-medium text-slate-400 uppercase tracking-wider">Memory Window</label>
+                                        <span className="text-xs text-blue-400 font-mono bg-blue-500/10 px-2 py-0.5 rounded">{newSessionMemory}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="10"
+                                        value={newSessionMemory}
+                                        onChange={e => setNewSessionMemory(e.target.value)}
+                                        className="w-full accent-blue-500"
+                                    />
+                                    <div className="flex justify-between px-1">
+                                        <span className="text-xs text-slate-500">0</span>
+                                        <span className="text-xs text-slate-500">10</span>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-4">

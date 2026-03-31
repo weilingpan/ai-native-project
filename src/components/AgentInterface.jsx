@@ -147,6 +147,7 @@ const AgentInterface = () => {
     const [newSessionTitle, setNewSessionTitle] = useState('');
     const [newSessionDesc, setNewSessionDesc] = useState('');
     const [newSessionModel, setNewSessionModel] = useState('');
+    const [newSessionMemory, setNewSessionMemory] = useState(0);
     const [newSessionTools, setNewSessionTools] = useState([]);
     const [availableModels, setAvailableModels] = useState([]);
     const [loadingModels, setLoadingModels] = useState(false);
@@ -326,6 +327,7 @@ const AgentInterface = () => {
         setEditingSessionId(null);
         setNewSessionTitle('');
         setNewSessionDesc('');
+        setNewSessionMemory(0);
         setNewSessionTools([...systemTools, ...ownerTools].map(t => t.name));
         setIsCreateModalOpen(true);
     };
@@ -336,6 +338,7 @@ const AgentInterface = () => {
         setNewSessionTitle(session.title);
         setNewSessionDesc(session.description || '');
         setNewSessionModel(session.model_name || session.model || availableModels[0]?.name || '');
+        setNewSessionMemory(session.memory_window ?? 0);
         setNewSessionTools(session.tools || []);
         setIsCreateModalOpen(true);
     };
@@ -349,6 +352,7 @@ const AgentInterface = () => {
             title: newSessionTitle.trim() || 'New Agent Session',
             description: newSessionDesc.trim() || '',
             model_name: newSessionModel,
+            memory_window: Number(newSessionMemory),
             metadata: { tools: newSessionTools }
         };
 
@@ -390,6 +394,7 @@ const AgentInterface = () => {
                             title: payload.title,
                             description: payload.description,
                             model_name: payload.model_name,
+                            memory_window: payload.memory_window,
                             tools: newSessionTools
                         };
                     }
@@ -1245,6 +1250,24 @@ const AgentInterface = () => {
                                                 ))}
                                             </select>
                                         )}
+                                    </div>
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-xs font-medium text-slate-400">Memory Window</label>
+                                            <span className="text-xs text-violet-400 font-mono bg-violet-500/10 px-1.5 py-0.5 rounded">{newSessionMemory}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="10"
+                                            value={newSessionMemory}
+                                            onChange={e => setNewSessionMemory(e.target.value)}
+                                            className="w-full accent-violet-500"
+                                        />
+                                        <div className="flex justify-between mt-1 px-1">
+                                            <span className="text-[10px] text-slate-500">0</span>
+                                            <span className="text-[10px] text-slate-500">10</span>
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool store</label>
