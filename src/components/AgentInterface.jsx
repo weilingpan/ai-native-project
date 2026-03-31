@@ -51,8 +51,9 @@ const renderMessageContent = (text) => {
 };
 
 // ── Tool Badge ────────────────────────────────────────────────────────────────
-const ToolBadge = ({ tool, variant = 'system' }) => {
+const ToolBadge = ({ tool, variant = 'system', onDelete }) => {
     const isSystem = variant === 'system';
+    const [confirmDelete, setConfirmDelete] = useState(false);
     const colors = isSystem
         ? { border: 'hover:border-emerald-500/30', icon: 'bg-emerald-500/10 group-hover:bg-emerald-500/20', iconText: 'text-emerald-400', dot: 'bg-emerald-500' }
         : { border: 'hover:border-violet-500/30', icon: 'bg-violet-500/10 group-hover:bg-violet-500/20', iconText: 'text-violet-400', dot: 'bg-violet-400' };
@@ -61,7 +62,7 @@ const ToolBadge = ({ tool, variant = 'system' }) => {
         <motion.div
             initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            className={`flex items-start gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/40 ${colors.border} hover:bg-slate-800/80 transition-all group cursor-default`}
+            className={`flex items-start gap-3 p-3 rounded-xl bg-slate-800/60 border border-slate-700/40 ${confirmDelete ? 'border-red-500/30 bg-red-500/5' : colors.border + ' hover:bg-slate-800/80'} transition-all group cursor-default`}
         >
             <div className={`mt-0.5 w-7 h-7 rounded-lg ${colors.icon} flex items-center justify-center shrink-0 transition-colors`}>
                 <Wrench size={14} className={colors.iconText} />
@@ -73,10 +74,38 @@ const ToolBadge = ({ tool, variant = 'system' }) => {
                         <span className={`w-1.5 h-1.5 rounded-full ${colors.dot} shrink-0`} title="Has implementation" />
                     )}
                 </div>
-                {tool.description && (
-                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2">{tool.description}</p>
+                {confirmDelete ? (
+                    <p className="text-[11px] text-red-400 mt-0.5">確定要刪除？</p>
+                ) : tool.description && (
+                    <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed line-clamp-2 break-all">{tool.description}</p>
                 )}
             </div>
+            {onDelete && (
+                confirmDelete ? (
+                    <div className="flex items-center gap-1 shrink-0">
+                        <button
+                            onClick={() => { onDelete(tool.name); setConfirmDelete(false); }}
+                            className="px-2 py-0.5 rounded-lg text-[11px] font-medium text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+                        >
+                            刪除
+                        </button>
+                        <button
+                            onClick={() => setConfirmDelete(false)}
+                            className="px-2 py-0.5 rounded-lg text-[11px] font-medium text-slate-400 hover:bg-slate-700 transition-colors"
+                        >
+                            取消
+                        </button>
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setConfirmDelete(true)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded-lg text-slate-600 hover:text-red-400 hover:bg-red-500/10 transition-all shrink-0"
+                        title="Delete tool"
+                    >
+                        <Trash2 size={13} />
+                    </button>
+                )
+            )}
         </motion.div>
     );
 };
@@ -128,9 +157,11 @@ const AgentInterface = () => {
 
     // Create Tool modal
     const [isCreateToolModalOpen, setIsCreateToolModalOpen] = useState(false);
+    const [toolKinds, setToolKinds] = useState([]);
+    const [selectedToolKind, setSelectedToolKind] = useState('webhook');
+    const [newToolFormData, setNewToolFormData] = useState({});
     const [newToolName, setNewToolName] = useState('');
     const [newToolDesc, setNewToolDesc] = useState('');
-    const [newToolWebhookUrl, setNewToolWebhookUrl] = useState('');
     const [isCreatingTool, setIsCreatingTool] = useState(false);
 
     // Header menu
@@ -148,6 +179,7 @@ const AgentInterface = () => {
         fetchTools();
         fetchSessions();
         fetchModels();
+        fetchToolKinds();
     }, []);
 
     useEffect(() => {
@@ -191,6 +223,20 @@ const AgentInterface = () => {
             setOwnerTools([]);
         } finally {
             setLoadingTools(false);
+        }
+    };
+
+    // ── Fetch Tool Kinds ──────────────────────────────────────────────────────
+    const fetchToolKinds = async () => {
+        try {
+            const res = await fetch('/agent/tools/kinds');
+            if (res.ok) {
+                const data = await res.json();
+                setToolKinds(data);
+                if (data.length > 0) setSelectedToolKind(data[0].kind);
+            }
+        } catch (e) {
+            console.error('Error fetching tool kinds:', e);
         }
     };
 
@@ -394,33 +440,75 @@ const AgentInterface = () => {
     };
 
     const handleCreateTool = async () => {
-        const name = newToolName.trim();
-        const webhookUrl = newToolWebhookUrl.trim();
-        if (!name || !webhookUrl) return;
+        const kindObj = toolKinds.find(k => k.kind === selectedToolKind);
+        if (!kindObj) return;
 
         const username = localStorage.getItem('username') || '';
         setIsCreatingTool(true);
         try {
-            const response = await fetch('/agent/tools', {
+            const parts = kindObj.register_via.split(' ');
+            const endpoint = parts.length > 1 ? parts[1] : '/agent/tools';
+
+            let payload = {};
+            if (endpoint === '/agent/tools') {
+                payload.name = newToolName.trim();
+                payload.description = newToolDesc.trim();
+                payload.owner = username;
+            }
+
+            // Apply field values
+            kindObj.fields.forEach(f => {
+                if (f.name === 'owner') {
+                    payload.owner = username;
+                    return;
+                }
+                let val = newToolFormData[f.name];
+                if (val !== undefined && val !== '') {
+                    if (f.type.includes('array') && typeof val === 'string') {
+                        try { val = JSON.parse(val); } catch(e) { val = val.split(',').map(s=>s.trim()); }
+                    }
+                    const keys = f.name.split('.');
+                    let current = payload;
+                    for (let i = 0; i < keys.length - 1; i++) {
+                        if (!current[keys[i]]) current[keys[i]] = {};
+                        current = current[keys[i]];
+                    }
+                    current[keys[keys.length - 1]] = val;
+                }
+            });
+
+            const response = await fetch(endpoint, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    name,
-                    owner: username,
-                    description: newToolDesc.trim(),
-                    metadata: { webhook_url: webhookUrl },
-                }),
+                body: JSON.stringify(payload),
             });
             if (!response.ok) throw new Error('Failed to create tool');
             setIsCreateToolModalOpen(false);
             setNewToolName('');
             setNewToolDesc('');
-            setNewToolWebhookUrl('');
+            setNewToolFormData({});
             fetchTools();
         } catch (err) {
             console.error('Error creating tool:', err);
         } finally {
             setIsCreatingTool(false);
+        }
+    };
+
+    const handleDeleteTool = async (toolName) => {
+        const username = localStorage.getItem('username') || '';
+        try {
+            const response = await fetch(`/agent/tools/${encodeURIComponent(toolName)}?owner=${encodeURIComponent(username)}`, {
+                method: 'DELETE',
+            });
+            if (!response.ok) throw new Error('Failed to delete tool');
+            setSessions(prev => prev.map(s => ({
+                ...s,
+                tools: s.tools.filter(t => t !== toolName)
+            })));
+            fetchTools();
+        } catch (err) {
+            console.error('Error deleting tool:', err);
         }
     };
 
@@ -561,13 +649,7 @@ const AgentInterface = () => {
                 return updated;
             });
 
-            if (botText.trim()) {
-                fetch(`/chat_session/${activeSessionId}/history`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_content: text, ai_content: botText })
-                }).catch(e => console.error('Failed to save agent history:', e));
-            }
+
 
         } catch (err) {
             if (err.name === 'AbortError') {
@@ -1061,7 +1143,7 @@ const AgentInterface = () => {
                                                 <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-800 text-slate-500 font-mono border border-slate-700/50">{ownerTools.length}</span>
                                             </div>
                                             <div className="space-y-2">
-                                                {ownerTools.map((tool, i) => <ToolBadge key={tool.name || i} tool={tool} variant="owner" />)}
+                                                {ownerTools.map((tool, i) => <ToolBadge key={tool.name || i} tool={tool} variant="owner" onDelete={handleDeleteTool} />)}
                                             </div>
                                         </div>
                                     )}
@@ -1339,47 +1421,80 @@ const AgentInterface = () => {
                                         <X size={16} />
                                     </button>
                                 </div>
-                                <div className="p-6 space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool Name <span className="text-red-400">*</span></label>
-                                        <input
-                                            type="text"
-                                            value={newToolName}
-                                            onChange={e => setNewToolName(e.target.value)}
-                                            placeholder="e.g. my_current_time"
-                                            autoFocus
-                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Description <span className="text-slate-600">(optional)</span></label>
-                                        <input
-                                            type="text"
-                                            value={newToolDesc}
-                                            onChange={e => setNewToolDesc(e.target.value)}
-                                            placeholder="What does this tool do?"
-                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-400 mb-1.5">Webhook URL <span className="text-red-400">*</span></label>
-                                        <input
-                                            type="url"
-                                            value={newToolWebhookUrl}
-                                            onChange={e => setNewToolWebhookUrl(e.target.value)}
-                                            placeholder="https://your-server/tools/endpoint"
-                                            className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
-                                        />
-                                    </div>
+                                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
+                                    {toolKinds.length > 0 && (
+                                        <div>
+                                            <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool Type</label>
+                                            <select
+                                                value={selectedToolKind}
+                                                onChange={e => {
+                                                    setSelectedToolKind(e.target.value);
+                                                    setNewToolFormData({});
+                                                }}
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all cursor-pointer"
+                                            >
+                                                {toolKinds.map(k => (
+                                                    <option key={k.kind} value={k.kind}>{k.kind}</option>
+                                                ))}
+                                            </select>
+                                            {toolKinds.find(k => k.kind === selectedToolKind)?.description && (
+                                                <p className="text-[11px] text-slate-500 mt-2 leading-relaxed p-3 bg-slate-800/30 rounded-lg border border-slate-700/30">
+                                                    {toolKinds.find(k => k.kind === selectedToolKind).description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {toolKinds.find(k => k.kind === selectedToolKind)?.register_via === 'POST /agent/tools' && (
+                                        <>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-400 mb-1.5">Tool Name <span className="text-red-400">*</span></label>
+                                                <input
+                                                    type="text"
+                                                    value={newToolName}
+                                                    onChange={e => setNewToolName(e.target.value)}
+                                                    placeholder="e.g. my_custom_tool"
+                                                    autoFocus
+                                                    className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-medium text-slate-400 mb-1.5">Description <span className="text-slate-600">(optional)</span></label>
+                                                <input
+                                                    type="text"
+                                                    value={newToolDesc}
+                                                    onChange={e => setNewToolDesc(e.target.value)}
+                                                    placeholder="What does this tool do?"
+                                                    className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all"
+                                                />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {toolKinds.find(k => k.kind === selectedToolKind)?.fields.filter(f => f.name !== 'owner').map(field => (
+                                        <div key={field.name}>
+                                            <label className="block text-xs font-medium text-slate-400 mb-1.5">
+                                                {field.name} {field.required && <span className="text-red-400">*</span>}
+                                            </label>
+                                            <input
+                                                type="text"
+                                                value={newToolFormData[field.name] || ''}
+                                                onChange={e => setNewToolFormData(prev => ({ ...prev, [field.name]: e.target.value }))}
+                                                placeholder={field.example || field.description || field.name}
+                                                className="w-full bg-slate-800/60 border border-slate-700/50 rounded-xl px-4 py-2.5 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/50 transition-all font-mono"
+                                            />
+                                            {field.description && <p className="text-[10px] text-slate-500 mt-1 leading-relaxed">{field.description}</p>}
+                                        </div>
+                                    ))}
                                 </div>
-                                <div className="flex gap-3 p-6 pt-0">
+                                <div className="flex gap-3 p-6 pt-0 mt-2">
                                     <button
                                         onClick={() => setIsCreateToolModalOpen(false)}
                                         className="flex-1 py-2.5 rounded-xl border border-slate-700/50 text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 text-sm font-medium transition-all"
                                     >Cancel</button>
                                     <button
                                         onClick={handleCreateTool}
-                                        disabled={!newToolName.trim() || !newToolWebhookUrl.trim() || isCreatingTool}
+                                        disabled={isCreatingTool}
                                         className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium transition-all shadow-lg shadow-emerald-900/30"
                                     >
                                         {isCreatingTool ? 'Creating…' : 'Create Tool'}
