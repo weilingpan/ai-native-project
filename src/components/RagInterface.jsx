@@ -1027,7 +1027,7 @@ const RagInterface = () => {
                                         Source Chunk
                                     </div>
                                     <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                                        {selectedSource.chunk_text}
+                                        {selectedSource.snippet || selectedSource.chunk_text || selectedSource.text || selectedSource.content || JSON.stringify(selectedSource, null, 2)}
                                     </p>
                                 </div>
                             </motion.div>
